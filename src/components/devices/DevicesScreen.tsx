@@ -213,9 +213,10 @@ export const DevicesScreen: React.FC = () => {
 
                   <div className="flex items-center gap-1.5">
                     {/* Wake Action */}
-                    {device.wol.enabled ? (
+                    {canManage && (device.wol.enabled ? (
                       <button
                         onClick={() => startWakeFlow(device)}
+                        disabled={device.powerTransition !== 'none'}
                         title="Dispatch Wake-on-LAN Magic Packet"
                         className={`px-2.5 py-1 text-xs font-medium rounded-lg flex items-center gap-1 transition-colors ${
                           device.status !== 'online'
@@ -233,12 +234,13 @@ export const DevicesScreen: React.FC = () => {
                       >
                         WOL off
                       </span>
-                    )}
+                    ))}
 
                     {/* Remote Shutdown Action */}
-                    {device.shutdown.enabled && device.status === 'online' ? (
+                    {canManage && (device.shutdown.enabled && device.status === 'online' ? (
                       <button
                         onClick={() => requestShutdownConfirmation(device)}
+                        disabled={device.powerTransition !== 'none'}
                         title="Send Remote Shutdown Command via Agent"
                         className="px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg flex items-center gap-1 transition-colors"
                       >
@@ -256,7 +258,7 @@ export const DevicesScreen: React.FC = () => {
                       >
                         Pwr n/a
                       </span>
-                    )}
+                    ))}
 
                     {/* Single Check Probe */}
                     <button
@@ -337,9 +339,10 @@ export const DevicesScreen: React.FC = () => {
 
                       <td className="py-3 px-4 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          {device.wol.enabled && (
+                          {canManage && device.wol.enabled && (
                             <button
                               onClick={() => startWakeFlow(device)}
+                              disabled={device.powerTransition !== 'none'}
                               title="Wake-on-LAN"
                               className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded"
                             >
@@ -347,9 +350,10 @@ export const DevicesScreen: React.FC = () => {
                             </button>
                           )}
 
-                          {device.shutdown.enabled && device.status === 'online' && (
+                          {canManage && device.shutdown.enabled && device.status === 'online' && (
                             <button
                               onClick={() => requestShutdownConfirmation(device)}
+                              disabled={device.powerTransition !== 'none'}
                               title="Remote Shutdown"
                               className="p-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded"
                             >

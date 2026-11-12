@@ -5,7 +5,8 @@
  * source of truth). Keep field names exactly as on the wire (snake_case); the UI model lives in
  * `src/types` and is converted in `mappers.ts`.
  *
- * Last synced with openapi.yaml 0.1.0 (2026-11-12).
+ * Last synced with openapi.yaml 0.1.0 (2026-11-12, incl. device_type/os, last_latency_ms, DELETE /devices/{id}/agent,
+ * GET /system/info, extra SystemMetrics and DdnsConfig fields).
  */
 
 export interface ApiErrorBody {
@@ -49,6 +50,9 @@ export interface AgentBinding {
   scheme?: 'http' | 'https';
 }
 
+export type DeviceType = 'desktop' | 'server' | 'laptop' | 'tv' | 'nas' | 'iot' | 'router';
+export type OperatingSystem = 'windows' | 'linux' | 'macos' | 'android' | 'freebsd' | 'embedded';
+
 export interface ApiDevice {
   id: string;
   name: string;
@@ -58,6 +62,10 @@ export interface ApiDevice {
   mac_address?: string;
   wol_broadcast_address?: string;
   wol_port?: number;
+  /** Absent on Controllers older than the 0002 migration; treat as `desktop`. */
+  device_type?: DeviceType;
+  /** Absent on older Controllers; treat as `linux`. */
+  os?: OperatingSystem;
   monitor_port: number;
   monitor_interval_seconds: number;
   monitor_timeout_ms: number;
@@ -67,6 +75,8 @@ export interface ApiDevice {
   agent?: AgentBinding;
   last_seen_at?: string;
   last_checked_at?: string;
+  /** Connect time of the most recent successful probe. */
+  last_latency_ms?: number;
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +89,8 @@ export interface DeviceCreate {
   mac_address?: string;
   wol_broadcast_address?: string;
   wol_port?: number;
+  device_type?: DeviceType;
+  os?: OperatingSystem;
   monitor_port: number;
   monitor_interval_seconds?: number;
   monitor_timeout_ms?: number;
@@ -136,7 +148,26 @@ export interface ApiSystemMetrics {
   memory?: { total_bytes?: number; available_bytes?: number; used_bytes?: number };
   disk?: { path?: string; total_bytes?: number; free_bytes?: number; used_bytes?: number };
   local_ips?: string[];
-  process?: { rss_bytes?: number; goroutines?: number; heap_alloc_bytes?: number };
+  cpu_cores?: number;
+  /** 1, 5, 15 minute averages. */
+  load_average?: number[];
+  kernel?: string;
+  /** Metric names this platform does not expose. */
+  restricted?: string[];
+  process?: { pid?: number; uptime_seconds?: number; rss_bytes?: number; goroutines?: number; heap_alloc_bytes?: number };
+}
+
+export interface SystemInfo {
+  version: string;
+  mode: 'controller' | 'agent' | 'both';
+  listen?: string;
+  tls?: boolean;
+  api_docs?: boolean;
+  access_token_ttl_seconds?: number;
+  refresh_token_ttl_seconds?: number;
+  retention_days?: number;
+  monitor_defaults?: { interval_seconds?: number; timeout_ms?: number; offline_threshold?: number };
+  command_deadlines?: { wake_seconds?: number; shutdown_seconds?: number };
 }
 
 export interface ControllerKey {
@@ -161,6 +192,11 @@ export interface ApiDdnsConfig {
   enabled: boolean;
   has_api_token: boolean;
   last_ip?: string;
+  /** Public address found by the latest discovery run. */
+  detected_ip?: string;
+  /** Content of the Cloudflare record as last read. */
+  dns_value?: string;
+  last_checked_at?: string;
   last_synced_at?: string;
   last_error?: string;
   last_error_at?: string;

@@ -515,7 +515,7 @@ export const DeviceFormModal: React.FC = () => {
               {!shutdownEnabled && editingDevice?.shutdown.enabled && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
                   <AlertCircle size={13} className="shrink-0 mt-0.5" />
-                  <span>The API cannot remove an agent binding yet; the existing binding stays in place.</span>
+                  <span>Saving will remove the agent binding; remote shutdown stops working for this device.</span>
                 </p>
               )}
 

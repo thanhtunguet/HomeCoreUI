@@ -19,7 +19,6 @@ import type {
   DeviceCreate,
   DeviceUpdate,
 } from './schema';
-import { getDeviceMeta } from './deviceMeta';
 import { formatRelative } from './format';
 
 // ---- devices -------------------------------------------------------------------------------
@@ -33,15 +32,15 @@ const PRESET_PORTS: Record<number, DeviceMonitoring['protocolPreset']> = {
 
 export const presetForPort = (port: number): DeviceMonitoring['protocolPreset'] => PRESET_PORTS[port] ?? 'CUSTOM';
 
+/** `latencyMs` is a fresher figure from a probe made in this session; it wins over the stored one. */
 export function toDevice(d: ApiDevice, latencyMs?: number): Device {
-  const meta = getDeviceMeta(d.id);
   const hasAgent = Boolean(d.agent);
   return {
     id: d.id,
     name: d.name,
     description: d.description ?? '',
-    type: meta.type,
-    os: meta.os,
+    type: d.device_type ?? 'desktop',
+    os: d.os ?? 'linux',
     ip: d.ip_address,
     mac: (d.mac_address ?? '').toUpperCase(),
     status: d.status,
@@ -53,7 +52,7 @@ export function toDevice(d: ApiDevice, latencyMs?: number): Device {
       protocolPreset: presetForPort(d.monitor_port),
       intervalSeconds: d.monitor_interval_seconds,
       timeoutMs: d.monitor_timeout_ms,
-      lastLatencyMs: latencyMs,
+      lastLatencyMs: latencyMs ?? d.last_latency_ms,
       lastCheckedAt: d.last_checked_at,
     },
     wol: {
@@ -81,6 +80,8 @@ export function toDeviceCreate(f: Partial<Device>): DeviceCreate {
     monitor_port: f.monitoring?.port ?? 22,
   };
   if (f.description?.trim()) body.description = f.description.trim();
+  if (f.type) body.device_type = f.type;
+  if (f.os) body.os = f.os;
   if (f.monitoring) {
     body.monitor_interval_seconds = f.monitoring.intervalSeconds;
     body.monitor_timeout_ms = f.monitoring.timeoutMs;
@@ -102,9 +103,9 @@ export function toDeviceCreate(f: Partial<Device>): DeviceCreate {
 }
 
 /**
- * Form data → PATCH body. The spec has no way to *unset* a field or remove the agent binding
- * (GAP-API-04): a disabled section is simply left out, i.e. unchanged on the server.
- * Clearing the MAC/broadcast is sent as an empty string, which the server may reject.
+ * Form data → PATCH body. Per the spec an empty string clears `description`, `mac_address` and
+ * `wol_broadcast_address`; omitted fields are unchanged. The agent binding is removed with a
+ * separate call (`removeDeviceAgent`), see `needsAgentRemoval`.
  */
 export function toDeviceUpdate(f: Partial<Device>, prev: Device): DeviceUpdate {
   const body = toDeviceCreate(f) as DeviceUpdate;
@@ -112,6 +113,11 @@ export function toDeviceUpdate(f: Partial<Device>, prev: Device): DeviceUpdate {
   if (f.wol?.enabled && !f.wol.broadcastAddress.trim() && prev.wol.broadcastAddress) body.wol_broadcast_address = '';
   if (f.description !== undefined && !f.description.trim() && prev.description) body.description = '';
   return body;
+}
+
+/** True when the user switched remote shutdown off for a device that had a binding. */
+export function needsAgentRemoval(f: Partial<Device>, prev: Device): boolean {
+  return prev.shutdown.enabled && f.shutdown?.enabled === false;
 }
 
 export function normalizeMac(mac: string): string {
@@ -187,8 +193,14 @@ export function toSystemMetrics(m: ApiSystemMetrics): SystemMetrics {
     diskUsedBytes: m.disk?.used_bytes,
     diskTotalBytes: m.disk?.total_bytes,
     localIps: m.local_ips ?? [],
+    cpuCores: m.cpu_cores,
+    loadAverage: m.load_average,
+    kernel: m.kernel,
+    restricted: m.restricted ?? [],
     isAndroidHost: os === 'android',
     process: {
+      pid: m.process?.pid,
+      uptimeSeconds: m.process?.uptime_seconds,
       rssBytes: m.process?.rss_bytes,
       goroutines: m.process?.goroutines,
       heapAllocBytes: m.process?.heap_alloc_bytes,
@@ -220,6 +232,9 @@ export function toDDNSConfig(c: ApiDdnsConfig, updating = false): DDNSConfig {
     enabled: c.enabled,
     hasApiToken: c.has_api_token,
     lastIp: c.last_ip,
+    detectedIp: c.detected_ip,
+    dnsValue: c.dns_value,
+    lastCheckedAt: c.last_checked_at,
     lastSyncedAt: c.last_synced_at,
     lastError: c.last_error,
     lastErrorAt: c.last_error_at,

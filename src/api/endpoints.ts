@@ -14,6 +14,7 @@ import type {
   DeviceCreate,
   DeviceUpdate,
   Health,
+  SystemInfo,
   Page,
   ProbeResult,
   StatusChange,
@@ -55,6 +56,8 @@ export const createDevice = (body: DeviceCreate) => request<ApiDevice>('/api/v1/
 export const updateDevice = (id: string, body: DeviceUpdate) =>
   request<ApiDevice>(`/api/v1/devices/${id}`, { method: 'PATCH', body });
 export const deleteDevice = (id: string) => request<void>(`/api/v1/devices/${id}`, { method: 'DELETE' });
+/** Idempotent: 204 whether or not a binding existed. */
+export const removeDeviceAgent = (id: string) => request<void>(`/api/v1/devices/${id}/agent`, { method: 'DELETE' });
 export const wakeDevice = (id: string) => request<ApiCommand>(`/api/v1/devices/${id}/wake`, { method: 'POST' });
 export const shutdownDevice = (id: string) => request<ApiCommand>(`/api/v1/devices/${id}/shutdown`, { method: 'POST' });
 export const probeDevice = (id: string) => request<ProbeResult>(`/api/v1/devices/${id}/probe`, { method: 'POST' });
@@ -67,6 +70,7 @@ export const getCommand = (id: string) => request<ApiCommand>(`/api/v1/commands/
 
 // system
 export const getSystemMetrics = () => request<ApiSystemMetrics>('/api/v1/system/metrics');
+export const getSystemInfo = () => request<SystemInfo>('/api/v1/system/info');
 export const getControllerKey = () => request<ControllerKey>('/api/v1/system/controller-key');
 
 // ddns (admin only)

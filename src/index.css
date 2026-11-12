@@ -39,3 +39,9 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.4);
 }
+
+/* Buttons disabled while a power command is in flight (power_transition != none). */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

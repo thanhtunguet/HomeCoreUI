@@ -20,8 +20,8 @@ import type {
   DdnsConfigUpdate,
   Health
 } from '../api/schema';
-import { commandToActivity, toDDNSConfig, toDevice, toDeviceCreate, toDeviceUpdate, toSystemMetrics } from '../api/mappers';
-import { removeDeviceMeta, setDeviceMeta } from '../api/deviceMeta';
+import { commandToActivity, needsAgentRemoval, toDDNSConfig, toDevice, toDeviceCreate, toDeviceUpdate, toSystemMetrics } from '../api/mappers';
+import { migrateLegacyDeviceMeta } from '../api/deviceMeta';
 import { clockTime } from '../api/format';
 import { usePolling } from '../hooks/usePolling';
 import { useAuth } from './AuthContext';
@@ -264,6 +264,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [setIssue]);
 
+  // One-time carry-over of browser-local device type/OS to the Controller (GAP-API-01).
+  const metaMigrated = useRef(false);
+  useEffect(() => {
+    if (!canManage || !devicesLoaded || metaMigrated.current) return;
+    metaMigrated.current = true;
+    void migrateLegacyDeviceMeta(apiDevices, (id, meta) => api.updateDevice(id, meta)).then(moved => {
+      if (moved > 0) void refreshDevices().catch(() => undefined);
+    });
+  }, [canManage, devicesLoaded, apiDevices, refreshDevices]);
+
   const refreshCommands = useCallback(async () => {
     try {
       setCommands(await api.listCommands({ max: 100 }));
@@ -342,10 +352,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else {
         saved = await api.createDevice(toDeviceCreate(deviceData));
       }
-      setDeviceMeta(saved.id, {
-        type: deviceData.type ?? editingDevice?.type ?? 'desktop',
-        os: deviceData.os ?? editingDevice?.os ?? 'linux'
-      });
+      let unbindError: string | null = null;
+      if (editingDevice && needsAgentRemoval(deviceData, editingDevice)) {
+        try {
+          await api.removeDeviceAgent(saved.id);
+          saved = { ...saved, agent: undefined };
+        } catch (e) {
+          unbindError = errMsg(e);
+        }
+      }
       setApiDevices(prev => (prev.some(d => d.id === saved.id) ? prev.map(d => (d.id === saved.id ? saved : d)) : [...prev, saved]));
       addActivity({
         category: 'device',
@@ -357,6 +372,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : `Added ${saved.name} with target ${saved.ip_address}:${saved.monitor_port}.`,
         outcome: editingDevice ? 'info' : 'success'
       });
+      if (unbindError) return `Saved, but the agent binding could not be removed: ${unbindError}`;
       setDeviceModalOpen(false);
       setEditingDevice(null);
       return null;
@@ -374,7 +390,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       pushToast('error', `Could not remove ${target.name}: ${errMsg(e)}`);
       return;
     }
-    removeDeviceMeta(id);
     setApiDevices(prev => prev.filter(d => d.id !== id));
     if (selectedId === id) setSelectedId(null);
     addActivity({

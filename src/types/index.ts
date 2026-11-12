@@ -42,9 +42,9 @@ export interface Device {
   id: string;
   name: string;
   description: string;
-  /** UI-only metadata (not stored by the Controller): see `api/deviceMeta.ts`. */
+  /** Stored by the Controller (`device_type`); icon and label only. */
   type: DeviceType;
-  /** UI-only metadata (not stored by the Controller). */
+  /** Stored by the Controller (`os`); informational. */
   os: OperatingSystem;
   ip: string;
   mac: string;
@@ -75,6 +75,11 @@ export interface DDNSConfig {
   /** The token itself is never returned by the API. */
   hasApiToken: boolean;
   lastIp?: string;
+  /** Public address found by the latest discovery run (absent until the Controller reports it). */
+  detectedIp?: string;
+  /** Content of the DNS record as last read from Cloudflare. */
+  dnsValue?: string;
+  lastCheckedAt?: string;
   lastSyncedAt?: string;
   lastError?: string;
   lastErrorAt?: string;
@@ -118,8 +123,16 @@ export interface SystemMetrics {
   diskUsedBytes?: number;
   diskTotalBytes?: number;
   localIps: string[];
+  cpuCores?: number;
+  /** 1, 5 and 15 minute load averages. */
+  loadAverage?: number[];
+  kernel?: string;
+  /** Metric names the platform does not expose (shown as an explanation instead of "—"). */
+  restricted: string[];
   isAndroidHost: boolean;
   process: {
+    pid?: number;
+    uptimeSeconds?: number;
     rssBytes?: number;
     goroutines?: number;
     heapAllocBytes?: number;

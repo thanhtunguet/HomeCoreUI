@@ -100,7 +100,8 @@ export const SystemScreen: React.FC = () => {
               Low-Power Embedded Host (Android)
             </span>
             <p className="text-neutral-400 leading-relaxed text-[11px]">
-              The Controller runs inside an Android app. Some metrics are restricted by the platform and may be missing.
+              The Controller runs inside an Android app. Some metrics are restricted by the platform and may be missing
+              {m.restricted.length > 0 ? ` (${m.restricted.join(', ')})` : ''}.
             </p>
           </div>
         </div>
@@ -114,7 +115,7 @@ export const SystemScreen: React.FC = () => {
             {m.hostname ?? '—'}
           </div>
           <div className="text-[11px] text-neutral-400 truncate">
-            {m.os}
+            {m.os}{m.cpuCores ? ` · ${m.cpuCores} cores` : ''}
           </div>
         </div>
 
@@ -123,8 +124,8 @@ export const SystemScreen: React.FC = () => {
           <div className="font-semibold text-sm font-mono text-neutral-900 dark:text-neutral-100">
             {m.platform}
           </div>
-          <div className="text-[11px] text-neutral-400">
-            Controller v{serverHealth?.version ?? '?'}
+          <div className="text-[11px] text-neutral-400 truncate">
+            Controller v{serverHealth?.version ?? '?'}{m.kernel ? ` · kernel ${m.kernel}` : ''}
           </div>
         </div>
 
@@ -135,7 +136,7 @@ export const SystemScreen: React.FC = () => {
           </div>
           <div className="text-[11px] text-neutral-400 flex items-center gap-1">
             <CheckCircle2 size={12} className="text-emerald-500" />
-            <span>Reported by the Controller</span>
+            <span>{m.loadAverage ? `Load ${m.loadAverage.map(v => v.toFixed(2)).join(' ')}` : 'Reported by the Controller'}</span>
           </div>
         </div>
 
@@ -146,6 +147,7 @@ export const SystemScreen: React.FC = () => {
           </div>
           <div className="text-[11px] text-neutral-400">
             {m.process.goroutines ?? '—'} active goroutines
+            {m.process.pid !== undefined ? ` · pid ${m.process.pid}` : ''}
           </div>
         </div>
       </div>

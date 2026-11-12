@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { getSystemInfo } from '../../api/endpoints';
+import type { SystemInfo } from '../../api/schema';
 import {
   Shield,
   Server,
@@ -41,6 +43,11 @@ export const SettingsScreen: React.FC = () => {
   const [defaultTimeout, setDefaultTimeout] = useState(settings.monitoring.defaultTimeoutMs);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
+  // Read-only server configuration; absent when the Controller predates GET /system/info.
+  const [info, setInfo] = useState<SystemInfo | null>(null);
+  useEffect(() => {
+    getSystemInfo().then(setInfo).catch(() => setInfo(null));
+  }, []);
 
   useEffect(() => {
     if (canManage && !controllerKey) void loadControllerKey();
@@ -56,7 +63,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleResetLocal = () => {
-    if (window.confirm('Clear all HomeCore data stored in this browser (preferences, device icons) and sign out?')) {
+    if (window.confirm('Clear all HomeCore data stored in this browser (preferences) and sign out?')) {
       try {
         Object.keys(localStorage)
           .filter(k => k.startsWith('homecore_'))
@@ -98,8 +105,8 @@ export const SettingsScreen: React.FC = () => {
       <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 flex items-start gap-2.5 text-[11px] text-neutral-500 dark:text-neutral-400">
         <Info size={14} className="shrink-0 mt-0.5 text-neutral-400" />
         <span>
-          Network listeners, allowed origins, session lifetime and monitoring defaults on the server are set in the Controller's
-          YAML configuration file; the API does not expose or change them.
+          Server settings are read-only here: network listeners, allowed origins, session lifetime and monitoring defaults are
+          set in the Controller's YAML configuration file. The effective values are shown below when the Controller reports them.
         </span>
       </div>
 
@@ -144,6 +151,13 @@ export const SettingsScreen: React.FC = () => {
           {row('Platform', systemMetrics?.platform ?? '—')}
           {row('Hostname', systemMetrics?.hostname ?? '—')}
           {row('Server clock', serverHealth ? new Date(serverHealth.time).toLocaleString() : '—')}
+          {info && row('Mode', info.mode)}
+          {info?.listen && row('Listen', `${info.listen}${info.tls ? ' (TLS)' : ''}`)}
+          {info?.access_token_ttl_seconds !== undefined && row('Access token', `${Math.round(info.access_token_ttl_seconds / 60)} min`)}
+          {info?.refresh_token_ttl_seconds !== undefined && row('Refresh token', `${Math.round(info.refresh_token_ttl_seconds / 86400)} days`)}
+          {info?.monitor_defaults?.interval_seconds !== undefined && row('Monitor default', `${info.monitor_defaults.interval_seconds} s · timeout ${info.monitor_defaults.timeout_ms ?? '—'} ms`)}
+          {info?.command_deadlines?.wake_seconds !== undefined && row('Command deadlines', `wake ${info.command_deadlines.wake_seconds} s · shutdown ${info.command_deadlines.shutdown_seconds ?? '—'} s`)}
+          {info?.retention_days !== undefined && row('History retention', `${info.retention_days} days`)}
         </div>
         <div className="flex flex-wrap gap-2">
           <a

@@ -229,6 +229,13 @@ export const DDNSScreen: React.FC = () => {
               <span className="text-neutral-500 block text-[11px]">Last IP pushed to Cloudflare</span>
               <span className="font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100 block">{ddnsConfig.lastIp ?? '—'}</span>
               <span className="text-[10px] text-neutral-400 block">Synced: {fmt(ddnsConfig.lastSyncedAt)}</span>
+              {ddnsConfig.detectedIp && (
+                <span className={`text-[10px] block font-mono ${ddnsConfig.lastIp && ddnsConfig.detectedIp !== ddnsConfig.lastIp ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-400'}`}>
+                  WAN now: {ddnsConfig.detectedIp}
+                  {ddnsConfig.lastIp && ddnsConfig.detectedIp !== ddnsConfig.lastIp ? ' (changed, sync needed)' : ''}
+                  {ddnsConfig.dnsValue && ddnsConfig.dnsValue !== ddnsConfig.detectedIp ? ` · DNS: ${ddnsConfig.dnsValue}` : ''}
+                </span>
+              )}
             </div>
             <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
               <span className="text-neutral-500 block text-[11px]">Sync cadence</span>

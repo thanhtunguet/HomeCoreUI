@@ -30,7 +30,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     setSelectedDevice,
     startWakeFlow,
     requestShutdownConfirmation,
-    triggerDDNSSync
+    triggerDDNSSync,
+    canManage
   } = useApp();
 
   const [query, setQuery] = useState('');
@@ -168,8 +169,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               </button>
 
               <div className="flex items-center gap-1 shrink-0 ml-2">
-                {device.wol.enabled && (
+                {canManage && device.wol.enabled && (
                   <button
+                    disabled={device.powerTransition !== 'none'}
                     onClick={() => {
                       startWakeFlow(device);
                       onClose();
@@ -180,8 +182,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                     <Zap size={14} />
                   </button>
                 )}
-                {device.shutdown.enabled && device.status === 'online' && (
+                {canManage && device.shutdown.enabled && device.status === 'online' && (
                   <button
+                    disabled={device.powerTransition !== 'none'}
                     onClick={() => {
                       requestShutdownConfirmation(device);
                       onClose();

@@ -124,9 +124,10 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
           </button>
 
           {/* Wake Button */}
-          {device.wol.enabled ? (
+          {canManage && (device.wol.enabled ? (
             <button
               onClick={() => startWakeFlow(device)}
+              disabled={device.powerTransition !== 'none'}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-colors"
             >
               <Zap size={14} className="text-emerald-500" />
@@ -140,12 +141,13 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
               <Zap size={14} />
               <span>WOL Disabled</span>
             </div>
-          )}
+          ))}
 
           {/* Shutdown Button */}
-          {device.shutdown.enabled && device.status === 'online' ? (
+          {canManage && (device.shutdown.enabled && device.status === 'online' ? (
             <button
               onClick={() => requestShutdownConfirmation(device)}
+              disabled={device.powerTransition !== 'none'}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors"
             >
               <Power size={14} className="text-red-500" />
@@ -163,7 +165,7 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
               <Power size={14} />
               <span>Shutdown N/A</span>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Scrollable Content */}

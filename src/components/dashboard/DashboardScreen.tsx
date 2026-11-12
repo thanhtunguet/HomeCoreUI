@@ -96,7 +96,7 @@ export const DashboardScreen: React.FC = () => {
             <Globe size={13} className="text-emerald-500" />
           </div>
           <div className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 font-mono truncate">
-            {ddnsConfig?.lastIp ?? '—'}
+            {ddnsConfig?.detectedIp ?? ddnsConfig?.lastIp ?? '—'}
           </div>
           <div className={`text-[11px] mt-1 flex items-center gap-1 truncate ${ddnsConfig?.status === 'error' ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
             <span>{ddnsConfig ? { synced: 'Cloudflare Synced', error: 'Last sync failed', updating: 'Syncing…', never_synced: 'Not synced yet', disabled: 'Sync disabled' }[ddnsConfig.status] : canManage ? 'No DDNS record' : 'Admin only'}</span>
@@ -193,9 +193,10 @@ export const DashboardScreen: React.FC = () => {
 
                 <div className="flex items-center gap-1">
                   {/* Wake Action */}
-                  {device.wol.enabled && device.status !== 'online' && (
+                  {canManage && device.wol.enabled && device.status !== 'online' && (
                     <button
                       onClick={() => startWakeFlow(device)}
+                      disabled={device.powerTransition !== 'none'}
                       title="Send Wake-on-LAN Packet"
                       className="px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 rounded flex items-center gap-1 transition-colors"
                     >
@@ -205,9 +206,10 @@ export const DashboardScreen: React.FC = () => {
                   )}
 
                   {/* Shutdown Action */}
-                  {device.shutdown.enabled && device.status === 'online' && (
+                  {canManage && device.shutdown.enabled && device.status === 'online' && (
                     <button
                       onClick={() => requestShutdownConfirmation(device)}
+                      disabled={device.powerTransition !== 'none'}
                       title="Initiate Remote Shutdown"
                       className="px-2 py-1 text-[11px] font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded flex items-center gap-1 transition-colors"
                     >
