@@ -1,0 +1,95 @@
+import React, { useState } from 'react';
+import { AppProvider, useApp } from './context/AppContext';
+import { TopBar } from './components/layout/TopBar';
+import { Sidebar } from './components/layout/Sidebar';
+import { MobileNav } from './components/layout/MobileNav';
+
+// Screens
+import { DashboardScreen } from './components/dashboard/DashboardScreen';
+import { DevicesScreen } from './components/devices/DevicesScreen';
+import { DDNSScreen } from './components/ddns/DDNSScreen';
+import { ActivityScreen } from './components/activity/ActivityScreen';
+import { SystemScreen } from './components/system/SystemScreen';
+import { SettingsScreen } from './components/settings/SettingsScreen';
+
+// Modals & Overlays
+import { WakeFlowModal } from './components/devices/WakeFlowModal';
+import { ShutdownFlowModal } from './components/devices/ShutdownFlowModal';
+import { DeviceDetailSheet } from './components/devices/DeviceDetailSheet';
+import { DeviceFormModal } from './components/devices/DeviceFormModal';
+import { CommandPalette } from './components/common/CommandPalette';
+import { AmbientClockMode } from './components/ambient/AmbientClockMode';
+
+const AppContent: React.FC = () => {
+  const { activeTab, selectedDevice, setSelectedDevice, ambientMode } = useApp();
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 flex flex-col md:flex-row transition-colors">
+      {/* Desktop & Tablet Sidebar */}
+      <Sidebar className="hidden md:flex shrink-0 sticky top-0" />
+
+      {/* Mobile Drawer Backdrop & Sidebar */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            onClick={() => setMobileMenuOpen(false)}
+          ></div>
+          <div className="relative z-50 w-64 h-full bg-white dark:bg-neutral-900 shadow-xl">
+            <Sidebar onCloseMobile={() => setMobileMenuOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-6">
+        <TopBar
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onToggleMobileMenu={() => setMobileMenuOpen(true)}
+        />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {activeTab === 'dashboard' && <DashboardScreen />}
+          {activeTab === 'devices' && <DevicesScreen />}
+          {activeTab === 'ddns' && <DDNSScreen />}
+          {activeTab === 'activity' && <ActivityScreen />}
+          {activeTab === 'system' && <SystemScreen />}
+          {activeTab === 'settings' && <SettingsScreen />}
+        </main>
+      </div>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileNav />
+
+      {/* Global Modals & Command Overlays */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+      />
+
+      <WakeFlowModal />
+      <ShutdownFlowModal />
+      <DeviceFormModal />
+
+      {selectedDevice && (
+        <DeviceDetailSheet
+          device={selectedDevice}
+          onClose={() => setSelectedDevice(null)}
+        />
+      )}
+
+      {/* Android Screensaver / Standby Ambient Mode */}
+      {ambientMode && <AmbientClockMode />}
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
+  );
+}
