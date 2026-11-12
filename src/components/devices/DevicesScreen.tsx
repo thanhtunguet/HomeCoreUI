@@ -30,7 +30,8 @@ export const DevicesScreen: React.FC = () => {
     probeDevice,
     startWakeFlow,
     requestShutdownConfirmation,
-    deleteDevice
+    deleteDevice,
+    canManage
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -98,7 +99,7 @@ export const DevicesScreen: React.FC = () => {
           </div>
 
           {/* Add Device Button */}
-          <button
+          {canManage && <button
             onClick={() => {
               setEditingDevice(null);
               setDeviceModalOpen(true);
@@ -107,7 +108,7 @@ export const DevicesScreen: React.FC = () => {
           >
             <Plus size={14} />
             <span>Add Device</span>
-          </button>
+          </button>}
         </div>
       </div>
 

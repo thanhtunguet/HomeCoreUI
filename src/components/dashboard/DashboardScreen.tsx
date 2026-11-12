@@ -32,21 +32,24 @@ export const DashboardScreen: React.FC = () => {
     probeDevice,
     startWakeFlow,
     requestShutdownConfirmation,
-    triggerDDNSSync
+    triggerDDNSSync,
+    canManage
   } = useApp();
 
   const offlineCount = devices.filter(d => d.status === 'offline').length;
   const unknownCount = devices.filter(d => d.status === 'unknown').length;
 
   // Format uptime
-  const formatUptime = (seconds: number) => {
+  const formatUptime = (seconds?: number) => {
+    if (seconds === undefined) return '—';
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     return `${days}d ${hours}h ${mins}m`;
   };
 
-  const formatBytes = (bytes: number) => {
+  const formatBytes = (bytes?: number) => {
+    if (bytes === undefined) return '—';
     const gb = bytes / (1024 * 1024 * 1024);
     return `${gb.toFixed(1)} GB`;
   };
@@ -65,24 +68,24 @@ export const DashboardScreen: React.FC = () => {
             </span>
           </div>
           <div className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 font-mono tabular-nums">
-            {formatUptime(systemMetrics.host.uptimeSeconds)}
+            {formatUptime(systemMetrics?.uptimeSeconds)}
           </div>
           <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1 truncate">
-            Uptime · Linux 5.15 ARM64
+            Uptime · {systemMetrics?.platform ?? 'host unknown'}
           </div>
         </div>
 
         {/* Local Network IP */}
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-xs mb-1">
-            <span>Local Gateway</span>
+            <span>Controller Address</span>
             <Wifi size={13} className="text-neutral-400" />
           </div>
           <div className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 font-mono">
-            192.168.1.2
+            {systemMetrics?.localIps[0] ?? '—'}
           </div>
           <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1 truncate">
-            eth0 · Port :3000 Active
+            {systemMetrics?.hostname ?? 'host'} · {window.location.host}
           </div>
         </div>
 
@@ -93,12 +96,12 @@ export const DashboardScreen: React.FC = () => {
             <Globe size={13} className="text-emerald-500" />
           </div>
           <div className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 font-mono truncate">
-            {ddnsConfig.currentIpv4}
+            {ddnsConfig?.lastIp ?? '—'}
           </div>
-          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1 truncate">
-            <span>Cloudflare Synced</span>
-            <span>·</span>
-            <span className="font-mono">{ddnsConfig.selectedRecordName}</span>
+          <div className={`text-[11px] mt-1 flex items-center gap-1 truncate ${ddnsConfig?.status === 'error' ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+            <span>{ddnsConfig ? { synced: 'Cloudflare Synced', error: 'Last sync failed', updating: 'Syncing…', never_synced: 'Not synced yet', disabled: 'Sync disabled' }[ddnsConfig.status] : canManage ? 'No DDNS record' : 'Admin only'}</span>
+            {ddnsConfig && <span>·</span>}
+            {ddnsConfig && <span className="font-mono">{ddnsConfig.recordName}</span>}
           </div>
         </div>
 
@@ -109,10 +112,10 @@ export const DashboardScreen: React.FC = () => {
             <Cpu size={13} className="text-neutral-400" />
           </div>
           <div className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 font-mono tabular-nums">
-            {systemMetrics.host.cpuUsagePercent}%
+            {systemMetrics?.cpuPercent !== undefined ? `${systemMetrics.cpuPercent.toFixed(0)}%` : '—'}
           </div>
           <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-1 truncate font-mono">
-            RAM {formatBytes(systemMetrics.host.memoryUsedBytes)} / {formatBytes(systemMetrics.host.memoryTotalBytes)}
+            RAM {formatBytes(systemMetrics?.memoryUsedBytes)} / {formatBytes(systemMetrics?.memoryTotalBytes)}
           </div>
         </div>
       </section>
@@ -126,7 +129,7 @@ export const DashboardScreen: React.FC = () => {
               <span>Registered Devices</span>
             </h2>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Automated TCP health checks monitored across subnet 192.168.1.0/24
+              Automated TCP health checks run by the Controller
             </p>
           </div>
 
@@ -240,54 +243,64 @@ export const DashboardScreen: React.FC = () => {
                   Cloudflare DDNS Alias
                 </h2>
               </div>
-              <button
-                onClick={() => triggerDDNSSync()}
-                disabled={ddnsConfig.status === 'updating'}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={12} className={ddnsConfig.status === 'updating' ? 'animate-spin text-emerald-500' : ''} />
-                <span>{ddnsConfig.status === 'updating' ? 'Syncing...' : 'Sync Now'}</span>
-              </button>
+              {ddnsConfig && canManage && (
+                <button
+                  onClick={() => triggerDDNSSync(ddnsConfig.id)}
+                  disabled={ddnsConfig.status === 'updating'}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={12} className={ddnsConfig.status === 'updating' ? 'animate-spin text-emerald-500' : ''} />
+                  <span>{ddnsConfig.status === 'updating' ? 'Syncing...' : 'Sync Now'}</span>
+                </button>
+              )}
             </div>
 
-            <div className="py-3 space-y-2.5 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-neutral-500 dark:text-neutral-400">Target Record Alias</span>
-                <span className="font-mono font-bold text-neutral-900 dark:text-neutral-100 truncate max-w-[240px]">
-                  {ddnsConfig.selectedRecordName}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-neutral-500 dark:text-neutral-400">DNS Zone</span>
-                <span className="font-mono text-neutral-700 dark:text-neutral-300">{ddnsConfig.selectedZoneName}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-neutral-500 dark:text-neutral-400">Cloudflare Resolved IP</span>
-                <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{ddnsConfig.currentDnsValue}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-neutral-500 dark:text-neutral-400">Detected Public WAN IP</span>
-                <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{ddnsConfig.currentIpv4}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-neutral-500 dark:text-neutral-400">Proxy Routing</span>
-                <span className={`text-[11px] font-medium ${ddnsConfig.proxied ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-500'}`}>
-                  {ddnsConfig.proxied ? 'Cloudflare Proxied (CDN)' : 'DNS Only (Direct)'}
-                </span>
-              </div>
-            </div>
+            {ddnsConfig ? (
+              <>
+                <div className="py-3 space-y-2.5 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500 dark:text-neutral-400">Target Record Alias</span>
+                    <span className="font-mono font-bold text-neutral-900 dark:text-neutral-100 truncate max-w-[240px]">
+                      {ddnsConfig.recordName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500 dark:text-neutral-400">Record Type</span>
+                    <span className="font-mono text-neutral-700 dark:text-neutral-300">{ddnsConfig.recordType}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500 dark:text-neutral-400">Last Pushed IP</span>
+                    <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{ddnsConfig.lastIp ?? '—'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500 dark:text-neutral-400">Sync Interval</span>
+                    <span className="font-medium text-neutral-800 dark:text-neutral-200">Every {Math.round(ddnsConfig.intervalSeconds / 60)} min</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-neutral-500 dark:text-neutral-400">Proxy Routing</span>
+                    <span className={`text-[11px] font-medium ${ddnsConfig.proxied ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-500'}`}>
+                      {ddnsConfig.proxied ? 'Cloudflare Proxied (CDN)' : 'DNS Only (Direct)'}
+                    </span>
+                  </div>
+                </div>
 
-            <div className="p-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800/80 text-xs flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${ddnsConfig.currentDnsValue === ddnsConfig.currentIpv4 ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                <span className="font-medium text-neutral-700 dark:text-neutral-300">
-                  {ddnsConfig.currentDnsValue === ddnsConfig.currentIpv4 ? 'IP matches Cloudflare' : 'WAN IP changed (Sync needed)'}
-                </span>
-              </div>
-              <span className="text-[11px] text-neutral-400">
-                Checked {new Date(ddnsConfig.lastCheckTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
+                <div className="p-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800/80 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${ddnsConfig.status === 'synced' ? 'bg-emerald-500' : ddnsConfig.status === 'error' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                    <span className="font-medium text-neutral-700 dark:text-neutral-300 truncate">
+                      {ddnsConfig.status === 'error' ? ddnsConfig.lastError ?? 'Last sync failed' : ddnsConfig.status === 'synced' ? 'Record up to date' : ddnsConfig.status === 'disabled' ? 'Sync disabled' : 'Waiting for first sync'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 shrink-0">
+                    {ddnsConfig.lastSyncedAt ? `Synced ${new Date(ddnsConfig.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Never synced'}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="py-4 text-xs text-neutral-500 dark:text-neutral-400">
+                {canManage ? 'No Cloudflare DDNS record is configured yet.' : 'DDNS is managed by administrators.'}
+              </p>
+            )}
           </div>
 
           <div className="pt-3 mt-3 border-t border-neutral-200 dark:border-neutral-800 flex justify-end">
@@ -340,7 +353,7 @@ export const DashboardScreen: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
-            <span>Audit log persistent on host disk</span>
+            <span>Controller command history + this session</span>
             <span className="font-mono">{activities.length} total events</span>
           </div>
         </section>

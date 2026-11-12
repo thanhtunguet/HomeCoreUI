@@ -85,7 +85,7 @@ export const ShutdownFlowModal: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-neutral-500 dark:text-neutral-400">Agent Endpoint</span>
                 <span className="font-mono text-neutral-800 dark:text-neutral-200">
-                  {targetDevice?.shutdown.agentHost || targetDevice?.ip}:{targetDevice?.shutdown.agentPort}
+                  {targetDevice?.shutdown.agentScheme}://{targetDevice?.ip}:{targetDevice?.shutdown.agentPort}
                 </span>
               </div>
             </div>
@@ -114,7 +114,7 @@ export const ShutdownFlowModal: React.FC = () => {
             {/* Progress Bar */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
-                <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                <span className={`font-medium ${shutdownFlow.step === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-neutral-700 dark:text-neutral-300'}`}>
                   {shutdownFlow.message}
                 </span>
                 <span className="font-mono text-neutral-500 tabular-nums">
@@ -124,7 +124,7 @@ export const ShutdownFlowModal: React.FC = () => {
               <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${
-                    shutdownFlow.step === 'offline_verified' ? 'bg-emerald-500' : 'bg-amber-500'
+                    shutdownFlow.step === 'offline_verified' ? 'bg-emerald-500' : shutdownFlow.step === 'failed' ? 'bg-red-500' : 'bg-amber-500'
                   }`}
                   style={{ width: `${shutdownFlow.progressPercent}%` }}
                 ></div>
@@ -169,6 +169,8 @@ export const ShutdownFlowModal: React.FC = () => {
               }`}>
                 {shutdownFlow.step === 'offline_verified' ? (
                   <CheckCircle2 size={13} className="mx-auto mb-1 text-emerald-500" />
+                ) : shutdownFlow.step === 'failed' ? (
+                  <AlertTriangle size={13} className="mx-auto mb-1 text-red-500" />
                 ) : (
                   <Loader2 size={13} className="mx-auto mb-1 text-amber-500 animate-spin" />
                 )}

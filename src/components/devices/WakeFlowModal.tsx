@@ -15,6 +15,10 @@ export const WakeFlowModal: React.FC = () => {
 
   if (!wakeFlow.active) return null;
 
+  const failed = wakeFlow.step === 'failed' || wakeFlow.step === 'packet_sent_probing_timeout';
+  const succeeded = wakeFlow.step === 'online_confirmed';
+  const finished = failed || succeeded;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl max-w-lg w-full shadow-2xl overflow-hidden">
@@ -47,7 +51,7 @@ export const WakeFlowModal: React.FC = () => {
           {/* Progress Bar */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
-              <span className="font-medium text-neutral-700 dark:text-neutral-300">
+              <span className={`font-medium ${failed ? 'text-red-600 dark:text-red-400' : 'text-neutral-700 dark:text-neutral-300'}`}>
                 {wakeFlow.message}
               </span>
               <span className="font-mono text-neutral-500 tabular-nums">
@@ -56,7 +60,7 @@ export const WakeFlowModal: React.FC = () => {
             </div>
             <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-emerald-500 transition-all duration-300"
+                className={`h-full transition-all duration-300 ${failed ? 'bg-red-500' : 'bg-emerald-500'}`}
                 style={{ width: `${wakeFlow.progressPercent}%` }}
               ></div>
             </div>
@@ -83,14 +87,18 @@ export const WakeFlowModal: React.FC = () => {
             </div>
 
             <div className={`p-2.5 rounded-lg border ${
-              wakeFlow.progressPercent >= 100
+              succeeded
                 ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
+                : failed
+                ? 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-300'
                 : wakeFlow.progressPercent >= 70
                 ? 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300'
                 : 'border-neutral-200 dark:border-neutral-800 text-neutral-400'
             }`}>
-              {wakeFlow.progressPercent >= 100 ? (
+              {succeeded ? (
                 <CheckCircle2 size={14} className="mx-auto mb-1 text-emerald-500" />
+              ) : failed ? (
+                <AlertTriangle size={14} className="mx-auto mb-1 text-red-500" />
               ) : (
                 <Loader2 size={14} className="mx-auto mb-1 text-amber-500 animate-spin" />
               )}
@@ -112,7 +120,7 @@ export const WakeFlowModal: React.FC = () => {
           </div>
 
           <div className="p-3 bg-neutral-50 dark:bg-neutral-800/40 rounded-lg text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-            <span className="font-semibold text-neutral-700 dark:text-neutral-300">Notice:</span> A Wake-on-LAN magic packet triggers hardware NIC boot. Operating system startup and TCP service readiness typically take between 15 to 45 seconds depending on hardware.
+            <span className="font-semibold text-neutral-700 dark:text-neutral-300">Notice:</span> A Wake-on-LAN magic packet triggers hardware NIC boot. Operating system startup and TCP service readiness typically take between 15 to 45 seconds depending on hardware. The Controller keeps watching for up to its wake deadline even if you close this dialog.
           </div>
         </div>
 
@@ -122,7 +130,7 @@ export const WakeFlowModal: React.FC = () => {
             onClick={cancelWakeFlow}
             className="px-4 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 rounded-lg transition-colors"
           >
-            {wakeFlow.progressPercent === 100 ? 'Done' : 'Run in Background'}
+            {finished ? 'Close' : 'Run in Background'}
           </button>
         </div>
       </div>

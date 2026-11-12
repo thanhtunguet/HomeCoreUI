@@ -4,6 +4,9 @@ export type OperatingSystem = 'windows' | 'linux' | 'macos' | 'android' | 'freeb
 
 export type DeviceStatus = 'online' | 'offline' | 'unknown';
 
+/** Derived by the Controller from the device's active command. */
+export type PowerTransition = 'none' | 'waking' | 'shutting_down';
+
 export interface DeviceMonitoring {
   enabled: boolean;
   port: number;
@@ -16,30 +19,38 @@ export interface DeviceMonitoring {
 }
 
 export interface DeviceWOL {
+  /** True when the device has a MAC address (the API has no separate flag). */
   enabled: boolean;
   macAddress: string;
+  /** Empty = the Controller derives the subnet's directed broadcast address. */
   broadcastAddress: string;
   port: number; // default 9
 }
 
 export interface DeviceShutdown {
+  /** True when the device has an agent binding. */
   enabled: boolean;
-  agentHost: string;
+  /** UUID of the Agent (its `agent_id` file). Commands are Ed25519-signed for this id. */
+  agentId: string;
   agentPort: number;
-  authConfigured: boolean;
+  agentScheme: 'http' | 'https';
+  /** Inferred client-side from the binding and device status; the API does not report agent health. */
   agentStatus: 'ready' | 'unreachable' | 'not_configured';
-  agentVersion?: string;
 }
 
 export interface Device {
   id: string;
   name: string;
   description: string;
+  /** UI-only metadata (not stored by the Controller): see `api/deviceMeta.ts`. */
   type: DeviceType;
+  /** UI-only metadata (not stored by the Controller). */
   os: OperatingSystem;
   ip: string;
   mac: string;
   status: DeviceStatus;
+  powerTransition: PowerTransition;
+  /** Human readable ("3 min ago", "Never"). */
   lastSeen: string;
   monitoring: DeviceMonitoring;
   wol: DeviceWOL;
@@ -47,40 +58,27 @@ export interface Device {
   createdAt: string;
 }
 
-export interface CloudflareZone {
-  id: string;
-  name: string;
-  status: 'active' | 'pending';
-}
+export type DDNSState = 'synced' | 'error' | 'updating' | 'never_synced' | 'disabled';
 
-export interface CloudflareRecordOption {
-  id: string;
-  zoneId: string;
-  name: string;
-  type: 'A' | 'AAAA';
-  content: string;
-  proxied: boolean;
-}
-
+/** One Cloudflare record kept up to date by the Controller (`/api/v1/ddns`). */
 export interface DDNSConfig {
-  provider: 'cloudflare';
-  apiTokenMasked: string;
-  tokenConfigured: boolean;
-  selectedZoneId: string;
-  selectedZoneName: string;
-  selectedRecordId: string;
-  selectedRecordName: string;
+  id: string;
+  name: string;
+  zoneId: string;
+  recordName: string;
   recordType: 'A' | 'AAAA';
   proxied: boolean;
-  currentDnsValue: string;
-  currentIpv4: string;
-  currentIpv6?: string;
-  syncIntervalMinutes: number;
-  autoSyncEnabled: boolean;
-  lastCheckTime: string;
-  lastSyncTime: string;
-  status: 'synced' | 'mismatch' | 'updating' | 'error';
-  lastSyncMessage?: string;
+  /** 1 = automatic. */
+  ttl: number;
+  intervalSeconds: number;
+  enabled: boolean;
+  /** The token itself is never returned by the API. */
+  hasApiToken: boolean;
+  lastIp?: string;
+  lastSyncedAt?: string;
+  lastError?: string;
+  lastErrorAt?: string;
+  status: DDNSState;
 }
 
 export type ActivityCategory = 'device' | 'wol' | 'shutdown' | 'ddns' | 'auth' | 'system';
@@ -105,75 +103,34 @@ export interface ActivityEvent {
   };
 }
 
-export interface NetworkInterface {
-  name: string;
-  ip: string;
-  mac: string;
-  rxBytes: number;
-  txBytes: number;
-  isDefault?: boolean;
-}
-
-export interface HostMetrics {
+/** Subset the Controller reports (`GET /api/v1/system/metrics`); every figure may be missing. */
+export interface SystemMetrics {
+  collectedAt: string;
+  platform: string;
   os: string;
   arch: string;
-  hostname: string;
-  kernel: string;
-  uptimeSeconds: number;
-  cpuUsagePercent: number;
-  cpuCores: number;
-  memoryUsedBytes: number;
-  memoryTotalBytes: number;
-  diskUsedBytes: number;
-  diskTotalBytes: number;
-  networkInterfaces: NetworkInterface[];
+  hostname?: string;
+  uptimeSeconds?: number;
+  cpuPercent?: number;
+  memoryUsedBytes?: number;
+  memoryTotalBytes?: number;
+  diskPath?: string;
+  diskUsedBytes?: number;
+  diskTotalBytes?: number;
+  localIps: string[];
   isAndroidHost: boolean;
-  restrictedMetrics?: string[];
+  process: {
+    rssBytes?: number;
+    goroutines?: number;
+    heapAllocBytes?: number;
+  };
 }
 
-export interface ProcessMetrics {
-  version: string;
-  pid: number;
-  uptimeSeconds: number;
-  memoryRssBytes: number;
-  goroutines: number;
-  heapAllocBytes: number;
-}
-
-export interface SystemMetrics {
-  host: HostMetrics;
-  process: ProcessMetrics;
-}
-
+/** Browser-local preferences. The Controller has no settings API (see docs/reports). */
 export interface AppSettings {
-  general: {
-    serverName: string;
-    language: string;
-    theme: 'dark' | 'light' | 'system';
-    timezone: string;
-  };
-  network: {
-    httpPort: number;
-    bindAddress: string;
-    allowSubnets: string[];
-    localIp: string;
-  };
   monitoring: {
     defaultIntervalSec: number;
     defaultTimeoutMs: number;
-    maxRetries: number;
-  };
-  security: {
-    username: string;
-    sessionTimeoutMinutes: number;
-    agentSecretTokenMasked: string;
-    trustedControllers: string[];
-  };
-  developer: {
-    apiDocsUrl: string;
-    version: string;
-    debugLogging: boolean;
-    simulateAndroidHost: boolean;
   };
 }
 

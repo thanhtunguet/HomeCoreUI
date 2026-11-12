@@ -99,8 +99,8 @@ export const ActivityScreen: React.FC = () => {
   };
 
   const handleCopyCurl = (event: ActivityEvent) => {
-    const curl = `curl -X ${event.details?.method || 'POST'} "http://192.168.1.2:3000${event.details?.endpoint || '/api/v1'}" \\
-  -H "Authorization: Bearer hc_token_******" \\
+    const curl = `curl -X ${event.details?.method || 'POST'} "${window.location.origin}${event.details?.endpoint || '/api/v1'}" \\
+  -H "Authorization: Bearer <access_token>" \\
   -H "Content-Type: application/json" ${
     event.details?.requestPayload ? `\\\n  -d '${JSON.stringify(event.details.requestPayload)}'` : ''
   }`;
@@ -128,7 +128,7 @@ export const ActivityScreen: React.FC = () => {
             Unified Activity & Command Timeline
           </h1>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Chronological audit trail of health probes, Wake-on-LAN packets, shutdown agent signals, and DDNS synchronization.
+            Wake-on-LAN and shutdown commands from the Controller's history, plus probe, device and DDNS actions taken in this browser session.
           </p>
         </div>
 
@@ -143,10 +143,11 @@ export const ActivityScreen: React.FC = () => {
 
           <button
             onClick={clearActivities}
+            title="Removes events raised in this browser session. Controller command history is kept."
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-red-600 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
           >
             <Trash2 size={14} />
-            <span>Clear Log</span>
+            <span>Clear Session Events</span>
           </button>
         </div>
       </div>

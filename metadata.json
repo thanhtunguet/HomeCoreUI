@@ -1,6 +1,0 @@
-{
-  "name": "HomeCore",
-  "description": "Lightweight self-hosted home infrastructure management dashboard for device monitoring, Wake-on-LAN, remote shutdown, and Cloudflare DDNS.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

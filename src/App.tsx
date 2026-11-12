@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginScreen } from './components/auth/LoginScreen';
+import { StatusBanner } from './components/layout/StatusBanner';
+import { Toasts } from './components/layout/Toasts';
 import { TopBar } from './components/layout/TopBar';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
@@ -51,6 +55,7 @@ const AppContent: React.FC = () => {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          <StatusBanner />
           {activeTab === 'dashboard' && <DashboardScreen />}
           {activeTab === 'devices' && <DevicesScreen />}
           {activeTab === 'ddns' && <DDNSScreen />}
@@ -69,6 +74,7 @@ const AppContent: React.FC = () => {
         onClose={() => setCommandPaletteOpen(false)}
       />
 
+      <Toasts />
       <WakeFlowModal />
       <ShutdownFlowModal />
       <DeviceFormModal />
@@ -86,10 +92,24 @@ const AppContent: React.FC = () => {
   );
 };
 
-export default function App() {
+/** Shows the login screen until the Controller has accepted credentials. */
+const AuthGate: React.FC = () => {
+  const { status } = useAuth();
+  if (status === 'loading') {
+    return <div className="min-h-screen flex items-center justify-center bg-neutral-100 dark:bg-neutral-950 text-xs text-neutral-500">Connecting…</div>;
+  }
+  if (status === 'anonymous') return <LoginScreen />;
   return (
     <AppProvider>
       <AppContent />
     </AppProvider>
+  );
+};
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }

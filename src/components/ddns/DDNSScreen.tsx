@@ -1,254 +1,266 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
-import { CustomSelect, SelectOption } from '../common/CustomSelect';
+import React, { useEffect, useState } from 'react';
+import { useApp, DDNSDraft } from '../../context/AppContext';
+import { CustomSelect } from '../common/CustomSelect';
+import { DDNSConfig } from '../../types';
 import {
   Globe,
   RefreshCw,
-  Shield,
   Cloud,
   CheckCircle2,
   AlertTriangle,
-  Clock,
   KeyRound,
   Sliders,
   Check,
-  Sparkles,
-  ArrowRight
+  Plus,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 
+const inputCls =
+  'w-full font-mono px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs focus:border-emerald-500 focus:outline-hidden';
+const cardCls = 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 shadow-xs space-y-4';
+
+const INTERVALS = [
+  { value: '60', label: 'Every 1 minute' },
+  { value: '300', label: 'Every 5 minutes (Default)' },
+  { value: '600', label: 'Every 10 minutes' },
+  { value: '900', label: 'Every 15 minutes' },
+  { value: '1800', label: 'Every 30 minutes' },
+  { value: '3600', label: 'Every 1 hour' }
+];
+
+const emptyDraft = (): DDNSDraft => ({
+  name: '',
+  zone_id: '',
+  record_name: '',
+  record_type: 'A',
+  proxied: false,
+  ttl: 1,
+  interval_seconds: 300,
+  enabled: true,
+  api_token: ''
+});
+
+const fromConfig = (c: DDNSConfig): DDNSDraft => ({
+  name: c.name,
+  zone_id: c.zoneId,
+  record_name: c.recordName,
+  record_type: c.recordType,
+  proxied: c.proxied,
+  ttl: c.ttl,
+  interval_seconds: c.intervalSeconds,
+  enabled: c.enabled,
+  api_token: ''
+});
+
 export const DDNSScreen: React.FC = () => {
-  const {
-    ddnsConfig,
-    availableZones,
-    availableRecords,
-    triggerDDNSSync,
-    updateDDNSConfig,
-    selectZone,
-    selectRecord
-  } = useApp();
+  const { ddnsConfigs, ddnsConfig, setActiveDdnsId, triggerDDNSSync, saveDdns, deleteDdns, canManage } = useApp();
 
-  const [apiTokenInput, setApiTokenInput] = useState('');
-  const [editingToken, setEditingToken] = useState(false);
-  const [customRecordName, setCustomRecordName] = useState('');
-  const [isCustomRecord, setIsCustomRecord] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState<DDNSDraft>(emptyDraft());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  // Filter records available for the currently selected zone
-  const zoneRecords = availableRecords.filter(r => r.zoneId === ddnsConfig.selectedZoneId);
+  // (Re)load the form when the selected record changes or "new" is toggled.
+  useEffect(() => {
+    setDraft(creating || !ddnsConfig ? emptyDraft() : fromConfig(ddnsConfig));
+    setError(null);
+  }, [creating, ddnsConfig?.id]); // not on every poll: that would wipe edits in progress
 
-  // Prepare options for Zone CustomSelect
-  const zoneOptions: SelectOption[] = availableZones.map(zone => ({
-    value: zone.id,
-    label: zone.name,
-    badge: zone.status.toUpperCase(),
-    icon: <Globe size={13} className="text-emerald-500" />
-  }));
+  if (!canManage) {
+    return (
+      <div className="max-w-5xl mx-auto p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
+        <AlertCircle size={14} />
+        <span>Cloudflare DDNS settings contain credentials and are available to administrators only.</span>
+      </div>
+    );
+  }
 
-  // Prepare options for Record CustomSelect
-  const recordOptions: SelectOption[] = [
-    ...zoneRecords.map(rec => ({
-      value: rec.id,
-      label: rec.name,
-      sublabel: `Current: ${rec.content}`,
-      badge: rec.type,
-      icon: <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-    })),
-    {
-      value: 'custom',
-      label: '+ Custom Subdomain...',
-      sublabel: `Under ${ddnsConfig.selectedZoneName}`,
-      badge: 'NEW',
-      icon: <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
-    }
-  ];
+  const isNew = creating || !ddnsConfig;
+  const set = <K extends keyof DDNSDraft>(k: K, v: DDNSDraft[K]) => setDraft(d => ({ ...d, [k]: v }));
 
-  // Prepare options for Sync Interval CustomSelect
-  const intervalOptions: SelectOption[] = [
-    { value: '5', label: 'Every 5 minutes' },
-    { value: '10', label: 'Every 10 minutes (Recommended)' },
-    { value: '15', label: 'Every 15 minutes' },
-    { value: '30', label: 'Every 30 minutes' },
-    { value: '60', label: 'Every 1 hour' }
-  ];
-
-  const handleZoneChange = (zoneId: string) => {
-    setIsCustomRecord(false);
-    selectZone(zoneId);
-  };
-
-  const handleRecordChange = (recordId: string) => {
-    if (recordId === 'custom') {
-      setIsCustomRecord(true);
-      const defaultCustom = `home.${ddnsConfig.selectedZoneName}`;
-      setCustomRecordName(defaultCustom);
-      selectRecord('custom', defaultCustom);
-    } else {
-      setIsCustomRecord(false);
-      selectRecord(recordId);
-    }
-  };
-
-  const handleCustomNameChange = (name: string) => {
-    setCustomRecordName(name);
-    selectRecord('custom', name);
-  };
-
-  const handleSaveToken = () => {
-    if (apiTokenInput.trim()) {
-      const masked = `${apiTokenInput.slice(0, 2)}••••••••••••••••••••••••${apiTokenInput.slice(-4)}`;
-      updateDDNSConfig({
-        apiTokenMasked: masked,
-        tokenConfigured: true
-      });
-      setApiTokenInput('');
-      setEditingToken(false);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2500);
-    }
-  };
-
-  // Simulation: Test ISP assigning a dynamic WAN IP
-  const handleSimulateIpChange = () => {
-    const randomOctet = Math.floor(Math.random() * 200) + 20;
-    const newIp = `203.0.113.${randomOctet}`;
-    updateDDNSConfig({
-      currentIpv4: newIp,
-      status: 'mismatch',
-      lastSyncMessage: `WAN IP changed to ${newIp}. Synchronization needed.`
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const err = await saveDdns(isNew ? null : ddnsConfig!.id, {
+      ...draft,
+      name: draft.name.trim(),
+      zone_id: draft.zone_id.trim(),
+      record_name: draft.record_name.trim()
     });
+    setBusy(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    setCreating(false);
+    set('api_token', '');
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   };
 
-  const isMatched = ddnsConfig.currentDnsValue === ddnsConfig.currentIpv4;
+  const handleDelete = async () => {
+    if (!ddnsConfig || !window.confirm(`Stop updating ${ddnsConfig.recordName}? The DNS record itself is not deleted.`)) return;
+    const err = await deleteDdns(ddnsConfig.id);
+    if (err) setError(err);
+  };
+
+  const statusLine = (c: DDNSConfig) => {
+    switch (c.status) {
+      case 'updating':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500">
+            <RefreshCw size={13} className="animate-spin" />
+            <span>Updating Cloudflare...</span>
+          </span>
+        );
+      case 'synced':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 size={15} />
+            <span>Record up to date</span>
+          </span>
+        );
+      case 'error':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+            <AlertTriangle size={15} />
+            <span>Last sync failed</span>
+          </span>
+        );
+      case 'disabled':
+        return <span className="text-xs font-medium text-neutral-500">Automatic sync disabled</span>;
+      default:
+        return <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Waiting for first sync</span>;
+    }
+  };
+
+  const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString() : '—');
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
-            Cloudflare DDNS Alias
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">Cloudflare DDNS</h1>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Link this home server to 1 Cloudflare API token, 1 DNS zone, and 1 record alias for dynamic WAN IP updates.
+            The Controller keeps each configured Cloudflare DNS record pointed at this network's public IP.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {ddnsConfig && !creating && (
           <button
-            onClick={() => triggerDDNSSync()}
+            onClick={() => triggerDDNSSync(ddnsConfig.id)}
             disabled={ddnsConfig.status === 'updating'}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors disabled:opacity-50 self-start sm:self-auto"
           >
             <RefreshCw size={14} className={ddnsConfig.status === 'updating' ? 'animate-spin' : ''} />
             <span>{ddnsConfig.status === 'updating' ? 'Synchronizing...' : 'Sync DNS Now'}</span>
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Primary Alias State Card */}
-      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-200 dark:border-neutral-800">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${
-              isMatched ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-500/10 text-amber-500'
-            }`}>
-              <Globe size={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-base font-bold text-neutral-900 dark:text-neutral-100">
-                  {ddnsConfig.selectedRecordName}
-                </span>
-                {ddnsConfig.proxied ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
-                    <Cloud size={12} className="text-amber-500" />
-                    <span>Proxied</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-md">
-                    <span>DNS Only</span>
-                  </span>
-                )}
+      {/* Record switcher */}
+      {(ddnsConfigs.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {ddnsConfigs.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setCreating(false);
+                setActiveDdnsId(c.id);
+              }}
+              className={`px-3 py-1.5 text-xs font-mono rounded-lg border transition-colors ${
+                !creating && ddnsConfig?.id === c.id
+                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold'
+                  : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              }`}
+            >
+              {c.recordName}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              creating ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-dashed border-neutral-300 dark:border-neutral-700 text-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+            }`}
+          >
+            <Plus size={13} />
+            <span>Add record</span>
+          </button>
+        </div>
+      )}
+
+      {/* Status card */}
+      {ddnsConfig && !creating && (
+        <div className={cardCls}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-200 dark:border-neutral-800">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${ddnsConfig.status === 'synced' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : ddnsConfig.status === 'error' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                <Globe size={22} />
               </div>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                Zone: <strong className="font-mono text-neutral-700 dark:text-neutral-300">{ddnsConfig.selectedZoneName}</strong> ({ddnsConfig.recordType} Record)
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-base font-bold text-neutral-900 dark:text-neutral-100">{ddnsConfig.recordName}</span>
+                  {ddnsConfig.proxied ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                      <Cloud size={12} className="text-amber-500" />
+                      <span>Proxied</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-md">DNS Only</span>
+                  )}
+                </div>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  {ddnsConfig.name} · {ddnsConfig.recordType} record · zone <span className="font-mono">{ddnsConfig.zoneId}</span>
+                </p>
+              </div>
+            </div>
+            {statusLine(ddnsConfig)}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
+              <span className="text-neutral-500 block text-[11px]">Last IP pushed to Cloudflare</span>
+              <span className="font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100 block">{ddnsConfig.lastIp ?? '—'}</span>
+              <span className="text-[10px] text-neutral-400 block">Synced: {fmt(ddnsConfig.lastSyncedAt)}</span>
+            </div>
+            <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
+              <span className="text-neutral-500 block text-[11px]">Sync cadence</span>
+              <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 block">
+                {ddnsConfig.enabled ? `Every ${Math.round(ddnsConfig.intervalSeconds / 60)} minutes` : 'Disabled'}
+              </span>
+              <span className="text-[10px] text-neutral-400 block">TTL: {ddnsConfig.ttl === 1 ? 'Auto' : `${ddnsConfig.ttl}s`}</span>
+            </div>
+            <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
+              <span className="text-neutral-500 block text-[11px]">Last error</span>
+              <span className={`text-sm font-semibold block break-words ${ddnsConfig.lastError ? 'text-red-600 dark:text-red-400' : 'text-neutral-800 dark:text-neutral-200'}`}>
+                {ddnsConfig.lastError ?? 'None'}
+              </span>
+              <span className="text-[10px] text-neutral-400 block">{ddnsConfig.lastError ? fmt(ddnsConfig.lastErrorAt) : ''}</span>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {ddnsConfig.status === 'updating' ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500">
-                <RefreshCw size={13} className="animate-spin" />
-                <span>Updating Cloudflare...</span>
-              </span>
-            ) : isMatched ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 size={15} />
-                <span>Synchronized with WAN IP</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                <AlertTriangle size={15} />
-                <span>WAN IP Mismatch (Sync Required)</span>
-              </span>
-            )}
-          </div>
         </div>
+      )}
 
-        {/* IP Comparison Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          {/* Detected Public WAN IP */}
-          <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
-            <span className="text-neutral-500 block text-[11px]">Detected Public WAN IP</span>
-            <span className="font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100 block">
-              {ddnsConfig.currentIpv4}
-            </span>
-            <span className="text-[10px] text-neutral-400 block">
-              Checked: {new Date(ddnsConfig.lastCheckTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </div>
-
-          {/* Cloudflare DNS Value */}
-          <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
-            <span className="text-neutral-500 block text-[11px]">Cloudflare Resolved IP</span>
-            <span className="font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100 block">
-              {ddnsConfig.currentDnsValue}
-            </span>
-            <span className="text-[10px] text-neutral-400 block">
-              Target Record: {ddnsConfig.recordType}
-            </span>
-          </div>
-
-          {/* Sync Cadence */}
-          <div className="p-3.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1">
-            <span className="text-neutral-500 block text-[11px]">Automatic Cron Cadence</span>
-            <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 block">
-              Every {ddnsConfig.syncIntervalMinutes} minutes
-            </span>
-            <span className="text-[10px] text-emerald-500 flex items-center gap-1">
-              <CheckCircle2 size={11} />
-              <span>Daemon scheduler active</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Cloudflare Settings Form */}
-      {/* Align: On lg screens -> 3 columns; on smaller screens -> 3 rows */}
-      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 shadow-xs space-y-5">
+      {/* Form */}
+      <form onSubmit={handleSubmit} className={cardCls}>
         <div className="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800">
           <div>
             <h2 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
               <Sliders size={16} className="text-neutral-500" />
-              <span>Cloudflare Configuration</span>
+              <span>{isNew ? 'Add a Cloudflare record' : 'Cloudflare Configuration'}</span>
             </h2>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Select your Cloudflare DNS Zone and pick the DNS record to use as the alias for this server.
+              The record must already exist in the zone. Zone and record are entered by hand: the API does not list Cloudflare zones.
             </p>
           </div>
-
-          {savedSuccess && (
+          {saved && (
             <span className="text-xs text-emerald-500 flex items-center gap-1 font-medium">
               <Check size={14} />
               <span>Saved</span>
@@ -256,198 +268,123 @@ export const DDNSScreen: React.FC = () => {
           )}
         </div>
 
-        {/* 3-Column Responsive Grid: 1 col on small screens, 3 cols on lg */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start text-xs">
-          {/* Column 1: Cloudflare API Token */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center h-5">
-              <label className="font-medium text-neutral-700 dark:text-neutral-300">
-                1. API Token
-              </label>
-              {!editingToken && (
-                <button
-                  type="button"
-                  onClick={() => setEditingToken(true)}
-                  className="text-emerald-600 dark:text-emerald-400 hover:underline text-[11px] font-medium"
-                >
-                  Change Token
-                </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <label className="block font-medium text-neutral-700 dark:text-neutral-300 space-y-1">
+            <span>Name</span>
+            <input className={inputCls} value={draft.name} onChange={e => set('name', e.target.value)} maxLength={100} placeholder="Home server" required />
+          </label>
+          <label className="block font-medium text-neutral-700 dark:text-neutral-300 space-y-1">
+            <span>Record name (FQDN)</span>
+            <input className={inputCls} value={draft.record_name} onChange={e => set('record_name', e.target.value)} maxLength={253} placeholder="home.example.com" required />
+          </label>
+          <label className="block font-medium text-neutral-700 dark:text-neutral-300 space-y-1">
+            <span>Zone ID</span>
+            <input className={inputCls} value={draft.zone_id} onChange={e => set('zone_id', e.target.value)} placeholder="32-character id from the Cloudflare dashboard" required />
+          </label>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
+                <KeyRound size={12} />
+                <span>API token</span>
+              </span>
+              {!isNew && ddnsConfig && (
+                <span className="text-[11px] text-neutral-400">{ddnsConfig.hasApiToken ? 'A token is stored' : 'No token stored'}</span>
               )}
             </div>
-
-            {editingToken ? (
-              <div className="space-y-2">
-                <input
-                  type="password"
-                  placeholder="Enter token..."
-                  value={apiTokenInput}
-                  onChange={e => setApiTokenInput(e.target.value)}
-                  className="w-full font-mono px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs focus:border-emerald-500 focus:outline-hidden"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSaveToken}
-                    className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors"
-                  >
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingToken(false)}
-                    className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 min-h-[42px]">
-                <div className="flex items-center gap-2 truncate">
-                  <KeyRound size={14} className="text-neutral-400 shrink-0" />
-                  <span className="font-mono text-neutral-700 dark:text-neutral-300 truncate">
-                    {ddnsConfig.apiTokenMasked}
-                  </span>
-                </div>
-                <span className="text-[10px] text-emerald-500 flex items-center gap-1 font-medium shrink-0 ml-1">
-                  <Check size={12} />
-                  <span>Valid</span>
-                </span>
-              </div>
-            )}
-            <p className="text-[11px] text-neutral-400">
-              Requires Zone:DNS:Edit permissions.
-            </p>
-          </div>
-
-          {/* Column 2: DNS Zone (Custom HTML Dropdown) */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center h-5">
-              <label className="font-medium text-neutral-700 dark:text-neutral-300">
-                2. DNS Zone (Domain)
-              </label>
-              <span className="text-[11px] text-neutral-400">
-                {availableZones.length} available
-              </span>
-            </div>
-
-            <CustomSelect
-              value={ddnsConfig.selectedZoneId}
-              onChange={handleZoneChange}
-              options={zoneOptions}
-              placeholder="Select DNS Zone..."
+            <input
+              type="password"
+              className={inputCls}
+              value={draft.api_token ?? ''}
+              onChange={e => set('api_token', e.target.value)}
+              placeholder={isNew ? 'Zone:DNS:Edit token' : 'Leave blank to keep the stored token'}
+              autoComplete="off"
+              required={isNew}
             />
-
-            <p className="text-[11px] text-neutral-400">
-              Fetched from authenticated Cloudflare account.
-            </p>
+            <p className="text-[11px] text-neutral-400">Write-only: the Controller never returns it.</p>
           </div>
-
-          {/* Column 3: Record Alias (Custom HTML Dropdown + Subdomain) */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center h-5">
-              <label className="font-medium text-neutral-700 dark:text-neutral-300">
-                3. Server Alias Record
-              </label>
-              <span className="text-[11px] text-neutral-400">
-                {zoneRecords.length} in zone
-              </span>
-            </div>
-
+          <div className="space-y-1">
+            <span className="block font-medium text-neutral-700 dark:text-neutral-300">Record type</span>
             <CustomSelect
-              value={isCustomRecord ? 'custom' : ddnsConfig.selectedRecordId}
-              onChange={handleRecordChange}
-              options={recordOptions}
-              placeholder="Select Alias Record..."
+              value={draft.record_type}
+              onChange={v => set('record_type', v as 'A' | 'AAAA')}
+              options={[
+                { value: 'A', label: 'A (IPv4)' },
+                { value: 'AAAA', label: 'AAAA (IPv6)' }
+              ]}
             />
-
-            {/* Custom record name input if selected */}
-            {isCustomRecord ? (
-              <div className="pt-1 space-y-1">
-                <input
-                  type="text"
-                  value={customRecordName}
-                  onChange={e => handleCustomNameChange(e.target.value)}
-                  placeholder={`subdomain.${ddnsConfig.selectedZoneName}`}
-                  className="w-full font-mono px-3 py-1.5 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs focus:border-emerald-500 focus:outline-hidden"
-                />
-              </div>
-            ) : (
-              <p className="text-[11px] text-neutral-400">
-                The DNS record dynamically updated to point to your WAN IP.
-              </p>
-            )}
           </div>
-        </div>
-
-        {/* Secondary Options: Proxy Mode & Auto-sync Interval */}
-        <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div>
-            <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Cloudflare Proxy Mode
-            </label>
+          <div className="space-y-1">
+            <span className="block font-medium text-neutral-700 dark:text-neutral-300">Background sync interval</span>
+            <CustomSelect
+              value={String(draft.interval_seconds)}
+              onChange={v => set('interval_seconds', Number(v))}
+              options={INTERVALS.some(o => o.value === String(draft.interval_seconds)) ? INTERVALS : [{ value: String(draft.interval_seconds), label: `Every ${draft.interval_seconds}s` }, ...INTERVALS]}
+            />
+          </div>
+          <label className="block font-medium text-neutral-700 dark:text-neutral-300 space-y-1">
+            <span>TTL (seconds, 1 = automatic)</span>
+            <input type="number" min={1} max={86400} className={inputCls} value={draft.ttl ?? 1} onChange={e => set('ttl', Number(e.target.value))} />
+          </label>
+          <div className="space-y-1">
+            <span className="block font-medium text-neutral-700 dark:text-neutral-300">Cloudflare proxy mode</span>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => updateDDNSConfig({ proxied: true })}
+                onClick={() => set('proxied', true)}
                 className={`p-2.5 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                  ddnsConfig.proxied
-                    ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold'
-                    : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                  draft.proxied ? 'border-amber-500 bg-amber-500/10 text-amber-700 dark:text-amber-300 font-semibold' : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800'
                 }`}
               >
-                <Cloud size={14} className={ddnsConfig.proxied ? 'text-amber-500' : 'text-neutral-400'} />
+                <Cloud size={14} className={draft.proxied ? 'text-amber-500' : 'text-neutral-400'} />
                 <span>Proxied (CDN)</span>
               </button>
-
               <button
                 type="button"
-                onClick={() => updateDDNSConfig({ proxied: false })}
+                onClick={() => set('proxied', false)}
                 className={`p-2.5 rounded-lg border text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                  !ddnsConfig.proxied
-                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold'
-                    : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                  !draft.proxied ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold' : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800'
                 }`}
               >
-                <Globe size={14} className={!ddnsConfig.proxied ? 'text-emerald-500' : 'text-neutral-400'} />
-                <span>DNS Only (Direct)</span>
+                <Globe size={14} className={!draft.proxied ? 'text-emerald-500' : 'text-neutral-400'} />
+                <span>DNS Only</span>
               </button>
             </div>
           </div>
+        </div>
 
-          <div>
-            <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-              Background Sync Interval
-            </label>
-            <CustomSelect
-              value={String(ddnsConfig.syncIntervalMinutes)}
-              onChange={val => updateDDNSConfig({ syncIntervalMinutes: Number(val) })}
-              options={intervalOptions}
-            />
+        <label className="flex items-center gap-2 cursor-pointer text-xs">
+          <input type="checkbox" checked={draft.enabled ?? true} onChange={e => set('enabled', e.target.checked)} className="rounded text-emerald-600 focus:ring-emerald-500" />
+          <span className="font-medium text-neutral-800 dark:text-neutral-200">Keep this record updated automatically</span>
+        </label>
+
+        {error && (
+          <div role="alert" className="flex items-start gap-2 p-2.5 rounded-lg text-xs bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20">
+            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-2.5">
+          {!isNew ? (
+            <button type="button" onClick={handleDelete} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+              <Trash2 size={14} />
+              <span>Remove</span>
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            {creating && (
+              <button type="button" onClick={() => setCreating(false)} className="px-4 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors">
+                Cancel
+              </button>
+            )}
+            <button type="submit" disabled={busy} className="px-4 py-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors disabled:opacity-50">
+              {busy ? 'Saving…' : isNew ? 'Add record' : 'Save changes'}
+            </button>
           </div>
         </div>
-      </div>
-
-      {/* Simulator Helper */}
-      <div className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="space-y-0.5">
-          <span className="font-semibold text-neutral-800 dark:text-neutral-200 flex items-center gap-1.5">
-            <Sparkles size={14} className="text-emerald-500" />
-            <span>Simulate Dynamic WAN IP Change</span>
-          </span>
-          <p className="text-neutral-500 text-[11px]">
-            Test how HomeCore detects when your ISP changes the public IP and triggers synchronization.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleSimulateIpChange}
-          className="px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors shrink-0 self-start sm:self-auto"
-        >
-          Simulate New WAN IP
-        </button>
-      </div>
+      </form>
     </div>
   );
 };

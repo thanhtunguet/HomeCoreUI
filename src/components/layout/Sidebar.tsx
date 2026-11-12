@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ExternalLink,
   Shield,
-  Wifi
+  Wifi,
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -29,7 +30,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     sidebarCollapsed,
     setSidebarCollapsed,
     onlineCount,
-    totalDevices
+    totalDevices,
+    systemMetrics,
+    connectionIssue,
+    username,
+    role,
+    logout
   } = useApp();
 
   const navItems = [
@@ -123,11 +129,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!sidebarCollapsed ? (
           <div className="space-y-2">
             <a
-              href="#/api/docs"
-              onClick={(e) => {
-                e.preventDefault();
-                setActiveTab('settings');
-              }}
+              href="/api/docs/"
+              target="_blank"
+              rel="noreferrer"
               className="flex items-center justify-between px-2.5 py-1.5 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors"
             >
               <span className="flex items-center gap-2">
@@ -139,18 +143,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             <div className="px-2.5 py-1 text-[11px] text-neutral-400 dark:text-neutral-500 space-y-0.5">
               <div className="flex items-center justify-between">
-                <span>Network</span>
-                <span className="font-mono text-neutral-600 dark:text-neutral-400">192.168.1.0/24</span>
+                <span>Controller</span>
+                <span className="font-mono text-neutral-600 dark:text-neutral-400">{systemMetrics?.localIps[0] ?? window.location.hostname}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Host State</span>
-                <span className="text-emerald-500 font-medium">Nominal</span>
+                <span>API</span>
+                <span className={`font-medium ${connectionIssue ? 'text-amber-500' : 'text-emerald-500'}`}>
+                  {connectionIssue ? 'Issue' : 'Connected'}
+                </span>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between px-2.5 py-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+              <span className="truncate" title={`Signed in as ${username} (${role})`}>
+                {username} · {role}
+              </span>
+              <button
+                onClick={() => void logout()}
+                title="Sign out"
+                aria-label="Sign out"
+                className="p-1 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 hover:text-neutral-900 dark:hover:text-neutral-100"
+              >
+                <LogOut size={13} />
+              </button>
             </div>
           </div>
         ) : (
           <div className="flex justify-center">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" title="Host Nominal"></span>
+            <span className={`w-2 h-2 rounded-full ${connectionIssue ? 'bg-amber-500' : 'bg-emerald-500'}`} title={connectionIssue ? 'API issue' : 'Connected'}></span>
           </div>
         )}
       </div>

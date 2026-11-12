@@ -36,7 +36,8 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
     setEditingDevice,
     setDeviceModalOpen,
     deleteDevice,
-    activities
+    activities,
+    canManage
   } = useApp();
 
   const [probing, setProbing] = React.useState(false);
@@ -86,20 +87,20 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
           </div>
 
           <div className="flex items-center gap-1">
-            <button
+            {canManage && <button
               onClick={handleEdit}
               title="Edit Device Configuration"
               className="p-1.5 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <Edit2 size={16} />
-            </button>
-            <button
+            </button>}
+            {canManage && <button
               onClick={handleDelete}
               title="Delete Device"
               className="p-1.5 text-neutral-500 hover:text-red-600 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <Trash2 size={16} />
-            </button>
+            </button>}
             <button
               onClick={onClose}
               className="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-md"
@@ -260,7 +261,7 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-neutral-500 dark:text-neutral-400">Broadcast Address</span>
-                    <span className="font-mono text-neutral-800 dark:text-neutral-200">{device.wol.broadcastAddress}:9</span>
+                    <span className="font-mono text-neutral-800 dark:text-neutral-200">{device.wol.broadcastAddress || 'auto (subnet broadcast)'}:{device.wol.port}</span>
                   </div>
                 </>
               )}
@@ -284,8 +285,8 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
                     ? 'text-amber-500'
                     : 'text-neutral-400'
                 }`}>
-                  {device.shutdown.agentStatus === 'ready' && 'Ready (Listening)'}
-                  {device.shutdown.agentStatus === 'unreachable' && 'Unreachable (Host Offline)'}
+                  {device.shutdown.agentStatus === 'ready' && 'Bound (host online)'}
+                  {device.shutdown.agentStatus === 'unreachable' && 'Bound (host offline)'}
                   {device.shutdown.agentStatus === 'not_configured' && 'Not Configured'}
                 </span>
               </div>
@@ -294,23 +295,19 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
                   <div className="flex justify-between items-center">
                     <span className="text-neutral-500 dark:text-neutral-400">Agent Endpoint</span>
                     <span className="font-mono text-neutral-800 dark:text-neutral-200">
-                      {device.shutdown.agentHost || device.ip}:{device.shutdown.agentPort}
+                      {device.shutdown.agentScheme}://{device.ip}:{device.shutdown.agentPort}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-neutral-500 dark:text-neutral-400 shrink-0">Agent ID</span>
+                    <span className="font-mono text-[11px] text-neutral-800 dark:text-neutral-200 truncate" title={device.shutdown.agentId}>
+                      {device.shutdown.agentId}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-neutral-500 dark:text-neutral-400">HMAC Token Auth</span>
-                    <span className="text-neutral-800 dark:text-neutral-200">
-                      {device.shutdown.authConfigured ? 'Configured & Active' : 'Unauthenticated'}
-                    </span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Command Auth</span>
+                    <span className="text-neutral-800 dark:text-neutral-200">Ed25519 signed by Controller</span>
                   </div>
-                  {device.shutdown.agentVersion && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-neutral-500 dark:text-neutral-400">Agent Version</span>
-                      <span className="font-mono text-neutral-800 dark:text-neutral-200">
-                        {device.shutdown.agentVersion}
-                      </span>
-                    </div>
-                  )}
                 </>
               )}
             </div>

@@ -20,7 +20,11 @@ export const DeviceFormModal: React.FC = () => {
     setDeviceModalOpen,
     editingDevice,
     setEditingDevice,
-    saveDevice
+    saveDevice,
+    settings,
+    controllerKey,
+    controllerKeyError,
+    loadControllerKey
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'basic' | 'monitoring' | 'wol' | 'shutdown'>('basic');
@@ -42,15 +46,18 @@ export const DeviceFormModal: React.FC = () => {
 
   // WOL
   const [wolEnabled, setWolEnabled] = useState(true);
-  const [broadcastIp, setBroadcastIp] = useState('192.168.1.255');
+  const [broadcastIp, setBroadcastIp] = useState('');
   const [wolPort, setWolPort] = useState(9);
 
   // Shutdown Agent
   const [shutdownEnabled, setShutdownEnabled] = useState(false);
-  const [agentHost, setAgentHost] = useState('');
-  const [agentPort, setAgentPort] = useState(8080);
-  const [agentAuthKey, setAgentAuthKey] = useState('');
-  const [keyRotated, setKeyRotated] = useState(false);
+  const [agentId, setAgentId] = useState('');
+  const [agentPort, setAgentPort] = useState(9750);
+  const [agentScheme, setAgentScheme] = useState<'http' | 'https'>('http');
+  const [keyCopied, setKeyCopied] = useState(false);
+
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (editingDevice) {
@@ -68,41 +75,46 @@ export const DeviceFormModal: React.FC = () => {
       setTimeoutMs(editingDevice.monitoring.timeoutMs);
 
       setWolEnabled(editingDevice.wol.enabled);
-      setBroadcastIp(editingDevice.wol.broadcastAddress || '192.168.1.255');
+      setBroadcastIp(editingDevice.wol.broadcastAddress);
       setWolPort(editingDevice.wol.port || 9);
 
       setShutdownEnabled(editingDevice.shutdown.enabled);
-      setAgentHost(editingDevice.shutdown.agentHost || editingDevice.ip);
-      setAgentPort(editingDevice.shutdown.agentPort || 8080);
-      setAgentAuthKey('');
-      setKeyRotated(false);
+      setAgentId(editingDevice.shutdown.agentId);
+      setAgentPort(editingDevice.shutdown.agentPort || 9750);
+      setAgentScheme(editingDevice.shutdown.agentScheme);
     } else {
       // Defaults for new device
       setName('');
       setDescription('');
       setType('desktop');
       setOs('windows');
-      setIp('192.168.1.');
+      setIp('');
       setMac('');
 
       setMonitorEnabled(true);
       setPortPreset('RDP');
       setMonitorPort(3389);
-      setIntervalSec(30);
-      setTimeoutMs(1500);
+      setIntervalSec(settings.monitoring.defaultIntervalSec);
+      setTimeoutMs(settings.monitoring.defaultTimeoutMs);
 
       setWolEnabled(true);
-      setBroadcastIp('192.168.1.255');
+      setBroadcastIp('');
       setWolPort(9);
 
       setShutdownEnabled(false);
-      setAgentHost('');
-      setAgentPort(8080);
-      setAgentAuthKey('');
-      setKeyRotated(false);
+      setAgentId('');
+      setAgentPort(9750);
+      setAgentScheme('http');
     }
     setActiveTab('basic');
+    setFormError(null);
+    setSubmitting(false);
   }, [editingDevice, deviceModalOpen]);
+
+  // The key the Agent must trust is shown next to the agent settings.
+  useEffect(() => {
+    if (deviceModalOpen && activeTab === 'shutdown' && shutdownEnabled && !controllerKey) void loadControllerKey();
+  }, [deviceModalOpen, activeTab, shutdownEnabled]);
 
   if (!deviceModalOpen) return null;
 
@@ -126,11 +138,23 @@ export const DeviceFormModal: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || submitting) return;
+    if (shutdownEnabled && !agentId.trim()) {
+      setFormError('Enter the Agent ID (UUID) to enable remote shutdown.');
+      setActiveTab('shutdown');
+      return;
+    }
+    if (wolEnabled && !mac.trim()) {
+      setFormError('A MAC address is required for Wake-on-LAN.');
+      setActiveTab('basic');
+      return;
+    }
 
-    saveDevice({
+    setSubmitting(true);
+    setFormError(null);
+    const error = await saveDevice({
       name,
       description,
       type,
@@ -152,20 +176,27 @@ export const DeviceFormModal: React.FC = () => {
       },
       shutdown: {
         enabled: shutdownEnabled,
-        agentHost: agentHost.trim() || ip.trim(),
+        agentId: agentId.trim(),
         agentPort: Number(agentPort),
-        authConfigured: shutdownEnabled && (Boolean(agentAuthKey) || Boolean(editingDevice?.shutdown.authConfigured)),
+        agentScheme,
         agentStatus: shutdownEnabled ? 'ready' : 'not_configured'
       }
     });
+    if (error) {
+      setFormError(error);
+      setSubmitting(false);
+    }
   };
 
-  const handleGenerateKey = () => {
-    const randomKey = 'hc_token_' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    setAgentAuthKey(randomKey);
-    setKeyRotated(true);
+  const copyKey = async () => {
+    if (!controllerKey) return;
+    try {
+      await navigator.clipboard.writeText(controllerKey.public_key);
+      setKeyCopied(true);
+      setTimeout(() => setKeyCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable (non-secure context): the key is selectable text */
+    }
   };
 
   return (
@@ -327,11 +358,10 @@ export const DeviceFormModal: React.FC = () => {
 
                 <div>
                   <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                    MAC Address *
+                    MAC Address (needed for Wake-on-LAN)
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="AA:BB:CC:DD:EE:FF"
                     value={mac}
                     onChange={e => setMac(e.target.value)}
@@ -408,7 +438,7 @@ export const DeviceFormModal: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    min="200"
+                    min="100"
                     max="10000"
                     step="100"
                     value={timeoutMs}
@@ -482,68 +512,94 @@ export const DeviceFormModal: React.FC = () => {
                 </span>
               </label>
 
+              {!shutdownEnabled && editingDevice?.shutdown.enabled && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+                  <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                  <span>The API cannot remove an agent binding yet; the existing binding stays in place.</span>
+                </p>
+              )}
+
               {shutdownEnabled && (
                 <div className="space-y-3 pt-2">
+                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+                    The agent runs on the device itself ({ip || 'device IP'}). Commands are signed by the
+                    Controller with Ed25519; no shared secret is entered here.
+                  </p>
+                  <div>
+                    <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                      Agent ID (UUID)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="from the agent's data_dir/agent_id file"
+                      value={agentId}
+                      onChange={e => setAgentId(e.target.value)}
+                      pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+                      title="UUID, e.g. 0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+                      className="w-full font-mono px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs"
+                    />
+                  </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                        Agent Host
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={ip || '192.168.1.100'}
-                        value={agentHost}
-                        onChange={e => setAgentHost(e.target.value)}
-                        className="w-full font-mono px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs"
-                      />
-                    </div>
                     <div>
                       <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                         Agent Port
                       </label>
                       <input
                         type="number"
+                        min="1"
+                        max="65535"
                         value={agentPort}
                         onChange={e => setAgentPort(Number(e.target.value))}
                         className="w-full font-mono px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs"
                       />
                     </div>
+                    <div className="col-span-2">
+                      <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                        Scheme
+                      </label>
+                      <CustomSelect
+                        value={agentScheme}
+                        onChange={val => setAgentScheme(val as 'http' | 'https')}
+                        options={[
+                          { value: 'http', label: 'HTTP (use a VPN / trusted LAN)' },
+                          { value: 'https', label: 'HTTPS (agent TLS enabled)' }
+                        ]}
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                      Agent Authentication Token (HMAC SHA-256)
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        placeholder={
-                          editingDevice?.shutdown.authConfigured
-                            ? '••••••••••••••••••••••••'
-                            : 'Enter or generate secret key'
-                        }
-                        value={agentAuthKey}
-                        onChange={e => setAgentAuthKey(e.target.value)}
-                        className="flex-1 font-mono px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleGenerateKey}
-                        className="px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-lg flex items-center gap-1.5 shrink-0"
-                      >
+                  <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
                         <KeyRound size={13} />
-                        <span>Rotate Secret</span>
-                      </button>
+                        <span>Controller public key (paste into the agent's <code>trusted_controllers</code>)</span>
+                      </span>
+                      {controllerKey && (
+                        <button type="button" onClick={copyKey} className="text-emerald-600 dark:text-emerald-400 hover:underline text-[11px] font-medium shrink-0 ml-2">
+                          {keyCopied ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
                     </div>
-                    {keyRotated && (
-                      <p className="text-[11px] text-emerald-500 mt-1 flex items-center gap-1">
-                        <Check size={12} />
-                        <span>New cryptographically random token assigned.</span>
+                    {controllerKey ? (
+                      <div className="font-mono text-[11px] text-neutral-600 dark:text-neutral-400 break-all select-all">
+                        key_id {controllerKey.key_id} · {controllerKey.algorithm}<br />
+                        {controllerKey.public_key}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-neutral-400">
+                        {controllerKeyError ?? 'Loading…'}
                       </p>
                     )}
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {formError && (
+            <div role="alert" className="flex items-start gap-2 p-2.5 rounded-lg text-xs bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>{formError}</span>
             </div>
           )}
 
@@ -561,9 +617,10 @@ export const DeviceFormModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors"
+              disabled={submitting}
+              className="px-4 py-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
             >
-              {editingDevice ? 'Save Changes' : 'Register Device'}
+              {submitting ? 'Saving…' : editingDevice ? 'Save Changes' : 'Register Device'}
             </button>
           </div>
         </form>
