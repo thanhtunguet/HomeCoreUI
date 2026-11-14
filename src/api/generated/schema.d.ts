@@ -373,8 +373,40 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Public signing key to paste into an agent's trusted_controllers */
+        /**
+         * Public signing key to paste into an agent's trusted_controllers
+         * @description The active Ed25519 key the Controller signs agent commands with. Only the public part is ever
+         *     returned. `key_id` is the lower-case hex of the first 8 bytes of SHA-256(public key), the same
+         *     value an agent logs when it trusts the key. The key is generated on the Controller's first start.
+         *     The same values are printed by `homecore key show`.
+         */
         get: operations["getControllerKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity feed (who did what), newest first
+         * @description Read-only feed built from the Controller's audit log: sign-ins, device changes, wake and
+         *     shutdown requests, account changes. Any authenticated user may read it (ADR-011).
+         *
+         *     Command *outcomes* (`completed`, `timed_out`) are not entries here: an entry of category
+         *     `command` carries the `command_id`, and `GET /commands/{id}` gives its lifecycle.
+         *     Client addresses and the reasons of failed sign-ins are not exposed. Cursor-paginated like
+         *     the other lists; entries are never pruned by `retention_days`.
+         */
+        get: operations["listActivity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -556,17 +588,20 @@ export interface components {
              */
             scheme?: "http" | "https";
             /**
-             * @description Reachability of the agent as seen by the Controller's dispatcher: `ready` (last contact
-             *     succeeded), `unreachable` (last contact failed) or `unknown` (never contacted). Absent
-             *     until the dispatcher reports it; clients must then treat it as `unknown`.
+             * @description Reachability of the agent as seen by the Controller: `ready` (the bound agent answered its
+             *     last contact), `unreachable` (the last contact failed, the answering agent is not the bound
+             *     one, or the device is offline) or `unknown` (not contacted yet, or the binding just
+             *     changed). Updated by every shutdown request and by a health check about once a minute for
+             *     devices seen online. Always present on a device's agent; clients should still treat absence
+             *     as `unknown`.
              * @enum {string}
              */
             status?: $Read<"ready" | "unreachable" | "unknown">;
-            /** @description Agent version reported on the last successful contact. */
+            /** @description Agent version reported by its last successful health check; absent until then. */
             version?: $Read<string>;
             /**
              * Format: date-time
-             * @description Last successful contact with the agent.
+             * @description Last successful contact with the agent (a health check or an accepted shutdown); absent until then.
              */
             last_ok_at?: $Read<string>;
         };
@@ -706,8 +741,10 @@ export interface components {
             /**
              * @description Machine-readable failure reason, present when `status` is `failed`. Values returned by the
              *     agent (`unauthorized`, `bad_request`, `wrong_agent`, `action_not_allowed`, `clock_skew`,
-             *     `stale`, `replay`, `busy`) are passed through; the Controller may add its own, so clients
-             *     must tolerate unknown values and fall back to `error`.
+             *     `stale`, `replay`, `busy`) are passed through. The Controller adds `wol_send_failed` (wake)
+             *     and, for shutdown, `agent_unreachable`, `agent_timeout`, `agent_bad_response`,
+             *     `agent_error` and `dispatch_error`; `interrupted` marks a command left pending by a
+             *     restart. Clients must tolerate unknown values and fall back to `error`.
              */
             error_code?: string;
             /** @description Human-readable failure text. */
@@ -799,6 +836,45 @@ export interface components {
             algorithm: "ed25519";
             /** @description Standard base64 of the 32-byte public key */
             public_key: string;
+        };
+        /**
+         * @description `auth` sign-in and sign-out; `device` device and agent-binding changes; `command` wake and
+         *     shutdown requests; `ddns` DDNS changes; `user` account changes; `system` anything else
+         *     (for example the creation of the controller key).
+         * @enum {string}
+         */
+        ActivityCategory: "auth" | "device" | "command" | "ddns" | "user" | "system";
+        ActivityItem: {
+            /**
+             * Format: int64
+             * @description Increasing entry id; stable.
+             */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** @description Username at the time of the action, `cli` for the command line, `system` for the Controller itself. Absent when unknown (a failed sign-in for an unknown name). */
+            actor?: string;
+            category: components["schemas"]["ActivityCategory"];
+            /** @description Machine-readable action, for example `device.shutdown`, `device.update`, `auth.login`. Clients must tolerate unknown values. */
+            action: string;
+            /**
+             * Format: uuid
+             * @description The device the entry is about (it may have been deleted since).
+             */
+            device_id?: string;
+            /**
+             * Format: uuid
+             * @description Set on wake and shutdown requests.
+             */
+            command_id?: string;
+            /** @description `ok`, `failed`, or an error code. */
+            result: string;
+            /** @description Human-readable English summary. */
+            message: string;
+        };
+        ActivityList: {
+            items: components["schemas"]["ActivityItem"][];
+            next_cursor?: string;
         };
         /** @enum {string} */
         DnsRecordType: "A" | "AAAA";
@@ -1503,6 +1579,35 @@ export interface operations {
                     "application/json": components["schemas"]["ControllerKey"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque cursor returned as `next_cursor` by the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Only entries about this device. */
+                device_id?: string;
+                category?: components["schemas"]["ActivityCategory"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Activity entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };
