@@ -518,6 +518,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/turn-on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Legacy: turn the device on (Wake-on-LAN)
+         * @description For old apps. Same as `POST /api/v1/devices/{id}/wake`, addressed by the `device` query
+         *     parameter, and answered with the plain text `true` once the request is accepted (`200`).
+         *     It does not wait for the machine to come up; poll `/api/is-online`.
+         *
+         *     `device` is the device id (UUID) or its name (case-insensitive). Authentication is the normal
+         *     `Authorization: Bearer` header; besides a session token, the long-lived tokens made by
+         *     `homecore token create` are accepted here. Errors use the usual JSON envelope: `404` unknown
+         *     device, `409` no MAC address, `429` more than one wake/shutdown per device per second.
+         */
+        get: operations["legacyTurnOn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/turn-off": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Legacy: turn the device off (signed shutdown via its agent)
+         * @description For old apps. Same as `POST /api/v1/devices/{id}/shutdown`, addressed by the `device` query
+         *     parameter, and answered with the plain text `true` once the request is accepted (`200`).
+         *     It does not wait for the machine to go down; poll `/api/is-online`. The shutdown is audited
+         *     with the owner of the token. `409` when the device has no agent binding.
+         *
+         *     A `GET` that changes state is not safe to prefetch or cache: keep the token secret and do not
+         *     open this URL in a browser by accident.
+         */
+        get: operations["legacyTurnOff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/is-online": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Legacy: is the device online? (plain text true or false)
+         * @description For old apps. Answers `200` with the plain text `true` when the Controller last observed the
+         *     device `online`, `false` otherwise (`offline` or `unknown`). Reads the stored status; it does
+         *     not probe. An unknown device is `404`, not `false`.
+         */
+        get: operations["legacyIsOnline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1017,6 +1092,18 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /**
+         * @description The token is valid but not accepted here (code `forbidden`): a legacy-scoped token used
+         *     outside the `legacy` operations.
+         */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description Not found */
         NotFound: {
             headers: {
@@ -1033,6 +1120,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The request was accepted; the body is the text `true`. */
+        LegacyTrue: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "text/plain": "true";
             };
         };
         /** @description Rate limited (code `rate_limited`); retry after the `Retry-After` header (seconds). */
@@ -1059,6 +1155,8 @@ export interface components {
     parameters: {
         DeviceId: string;
         DdnsId: string;
+        /** @description The device's id (UUID) or its name, compared case-insensitively. */
+        LegacyDevice: string;
         Limit: number;
         /** @description Opaque cursor returned as `next_cursor` by the previous page. */
         Cursor: string;
@@ -1795,6 +1893,75 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    legacyTurnOn: {
+        parameters: {
+            query: {
+                /** @description The device's id (UUID) or its name, compared case-insensitively. */
+                device: components["parameters"]["LegacyDevice"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LegacyTrue"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    legacyTurnOff: {
+        parameters: {
+            query: {
+                /** @description The device's id (UUID) or its name, compared case-insensitively. */
+                device: components["parameters"]["LegacyDevice"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["LegacyTrue"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    legacyIsOnline: {
+        parameters: {
+            query: {
+                /** @description The device's id (UUID) or its name, compared case-insensitively. */
+                device: components["parameters"]["LegacyDevice"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The text `true` or `false` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": "true" | "false";
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

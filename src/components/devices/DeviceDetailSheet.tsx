@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Device } from '../../types';
 import { formatRelative } from '../../api/format';
+import { legacyEndpoints } from '../../api/legacy';
 import { StatusBadge } from '../common/StatusBadge';
 import { DeviceIcon } from '../common/DeviceIcon';
 import {
@@ -18,7 +19,10 @@ import {
   Activity,
   AlertCircle,
   HelpCircle,
-  CheckCircle2
+  CheckCircle2,
+  Copy,
+  Check,
+  Link2
 } from 'lucide-react';
 
 /** Label for the agent row; says when the state is only a guess from the host status. */
@@ -33,6 +37,82 @@ const agentStatusLabel = (s: Device['shutdown']): string => {
     default:
       return 'Unknown (not contacted yet)';
   }
+};
+
+/**
+ * The three URLs old apps call for this device (ADR-017), each with a copy button. The apps send
+ * their own `Authorization: Bearer` header; the Controller operator makes that token with
+ * `homecore token create`, so no secret is shown here.
+ */
+const LegacyEndpointsSection: React.FC<{ device: Device }> = ({ device }) => {
+  const endpoints = React.useMemo(() => legacyEndpoints(device, window.location.origin), [device]);
+  const [copied, setCopied] = React.useState<string | null>(null);
+  const [failed, setFailed] = React.useState(false);
+  const timer = React.useRef<number | undefined>(undefined);
+
+  React.useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const copy = async (key: string, url: string) => {
+    window.clearTimeout(timer.current);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(key);
+      setFailed(false);
+    } catch {
+      // Clipboard API unavailable (plain HTTP on a LAN address): the URL is selectable text.
+      setCopied(null);
+      setFailed(true);
+    }
+    timer.current = window.setTimeout(() => {
+      setCopied(null);
+      setFailed(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+        <Link2 size={14} />
+        <span>Legacy API Endpoints</span>
+      </h3>
+
+      <div className="bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3.5 space-y-3 text-xs">
+        {endpoints.map(ep => (
+          <div key={ep.key} className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                {ep.label} <span className="font-normal text-neutral-400">· GET · {ep.hint}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => copy(ep.key, ep.url)}
+                aria-label={`Copy ${ep.label} URL`}
+                className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md transition-colors"
+              >
+                {copied === ep.key ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                <span>{copied === ep.key ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+            <code
+              className="block font-mono text-[11px] text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700/60 rounded-md px-2 py-1.5 break-all select-all"
+            >
+              {ep.url}
+            </code>
+          </div>
+        ))}
+        <div className="pt-1.5 border-t border-neutral-200 dark:border-neutral-700/60 text-[11px] text-neutral-500 dark:text-neutral-400 flex items-start gap-1.5">
+          <AlertCircle size={13} className="shrink-0 mt-px text-neutral-400" />
+          <span>
+            {failed
+              ? 'Could not copy automatically: select the URL and copy it. '
+              : 'Old apps must send an Authorization: Bearer header. Create a long-lived token on the Controller with '}
+            {!failed && <span className="font-mono">homecore token create --user NAME</span>}
+            {!failed && '. The device is matched by name, case-insensitive.'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 interface DeviceDetailSheetProps {
@@ -350,6 +430,9 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
               )}
             </div>
           </div>
+
+          {/* Section: URLs for apps that use the old single-device API */}
+          <LegacyEndpointsSection device={device} />
 
           {/* Section: Recent Events for this Device */}
           <div className="space-y-2.5">
