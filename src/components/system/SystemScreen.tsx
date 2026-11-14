@@ -188,7 +188,7 @@ export const SystemScreen: React.FC = () => {
           <div className="flex justify-between items-center text-xs">
             <span className="font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
               <HardDrive size={15} className="text-neutral-400" />
-              <span>Disk{m.diskPath ? ` (${m.diskPath})` : ''}</span>
+              <span title={m.diskPath || undefined} tabIndex={m.diskPath ? 0 : undefined}>Disk</span>
             </span>
             <span className="font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100 tabular-nums">
               {diskPercent !== undefined ? `${diskPercent}%` : '—'}
@@ -239,16 +239,17 @@ export const SystemScreen: React.FC = () => {
             <span>Local Addresses</span>
           </h2>
 
-          {m.localIps.length === 0 ? (
+          {m.localAddresses.length === 0 ? (
             <p className="text-xs text-neutral-400">No addresses reported.</p>
           ) : (
             <div className="space-y-2">
-              {m.localIps.map(ip => (
+              {m.localAddresses.map((address, index) => (
                 <div
-                  key={ip}
-                  className="p-3 bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 rounded-lg text-xs font-mono text-neutral-800 dark:text-neutral-200"
+                  key={`${address.interfaceName ?? 'unknown'}-${address.ipAddress}-${index}`}
+                  className="flex items-start justify-between gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 rounded-lg text-xs font-mono text-neutral-800 dark:text-neutral-200"
                 >
-                  {ip}
+                  <span className="min-w-0 break-all text-neutral-500">{address.interfaceName ?? '—'}</span>
+                  <span className="min-w-0 break-all text-right">{address.ipAddress}</span>
                 </div>
               ))}
             </div>

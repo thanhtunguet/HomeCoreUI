@@ -141,6 +141,7 @@ export interface SystemMetrics {
   diskUsedBytes?: number;
   diskTotalBytes?: number;
   localIps: string[];
+  localAddresses: { interfaceName?: string; ipAddress: string }[];
   cpuCores?: number;
   /** 1, 5 and 15 minute load averages. */
   loadAverage?: number[];

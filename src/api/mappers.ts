@@ -220,6 +220,8 @@ export function toSystemMetrics(m: ApiSystemMetrics): SystemMetrics {
     diskUsedBytes: m.disk?.used_bytes,
     diskTotalBytes: m.disk?.total_bytes,
     localIps: m.local_ips ?? [],
+    localAddresses: m.local_addresses?.map(a => ({ interfaceName: a.interface_name, ipAddress: a.ip_address }))
+      ?? (m.local_ips ?? []).map(ipAddress => ({ ipAddress })),
     cpuCores: m.cpu_cores,
     loadAverage: m.load_average,
     kernel: m.kernel,

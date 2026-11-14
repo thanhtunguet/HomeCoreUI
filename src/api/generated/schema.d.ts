@@ -790,6 +790,11 @@ export interface components {
                 used_bytes?: number;
             };
             local_ips?: string[];
+            /** @description Local unicast addresses paired with their network interface names; local_ips remains available for older clients. */
+            local_addresses?: {
+                interface_name: string;
+                ip_address: string;
+            }[];
             cpu_cores?: number;
             /** @description 1, 5 and 15 minute load averages; absent where the OS has none. */
             load_average?: number[];
