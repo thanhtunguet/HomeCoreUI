@@ -2,14 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { ApiError, setAuthLostHandler } from '../api/client';
 import * as api from '../api/endpoints';
 import { clearSession, onSessionChange, readSession, writeSession } from '../api/session';
-import type { Role, User } from '../api/schema';
+import type { User } from '../api/schema';
 
 type AuthStatus = 'loading' | 'anonymous' | 'authenticated';
 
 interface AuthContextType {
   status: AuthStatus;
   user: User | null;
-  isAdmin: boolean;
   /** Why the user is on the login screen (expired session, controller unreachable, ...). */
   notice: string | null;
   login: (username: string, password: string) => Promise<void>;
@@ -96,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [drop]);
 
   const value = useMemo<AuthContextType>(
-    () => ({ status, user, isAdmin: (user?.role as Role | undefined) === 'admin', notice, login, logout }),
+    () => ({ status, user, notice, login, logout }),
     [status, user, notice, login, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

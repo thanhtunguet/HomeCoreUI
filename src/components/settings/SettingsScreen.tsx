@@ -29,8 +29,6 @@ export const SettingsScreen: React.FC = () => {
     theme,
     toggleTheme,
     username,
-    role,
-    canManage,
     logout,
     serverHealth,
     systemMetrics,
@@ -50,8 +48,8 @@ export const SettingsScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (canManage && !controllerKey) void loadControllerKey();
-  }, [canManage]);
+    if (!controllerKey) void loadControllerKey();
+  }, []);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,13 +118,7 @@ export const SettingsScreen: React.FC = () => {
         </div>
         <div>
           {row('Signed in as', username)}
-          {row('Role', role)}
         </div>
-        {!canManage && (
-          <p className="text-[11px] text-neutral-400">
-            The viewer role is read-only: adding devices, Wake-on-LAN, shutdown and DDNS need an admin.
-          </p>
-        )}
         <button
           type="button"
           onClick={() => void logout()}
@@ -181,34 +173,32 @@ export const SettingsScreen: React.FC = () => {
         </div>
       </section>
 
-      {/* Agent trust (admin) */}
-      {canManage && (
-        <section className={cardCls}>
-          <div className={headCls}>
-            <h2 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
-              <KeyRound size={16} className="text-neutral-500" />
-              <span>Agent Trust: Controller Signing Key</span>
-            </h2>
-            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Shutdown commands are signed with this Ed25519 key. Add the public key to each Agent's <code>trusted_controllers</code>.
-            </p>
-          </div>
-          {controllerKey ? (
-            <div className="space-y-1.5">
-              {row('Key id', controllerKey.key_id)}
-              {row('Algorithm', controllerKey.algorithm)}
-              <div className="flex items-start justify-between gap-3 pt-1">
-                <span className="font-mono text-[11px] break-all text-neutral-700 dark:text-neutral-300 select-all">{controllerKey.public_key}</span>
-                <button type="button" onClick={copyKey} className="text-emerald-600 dark:text-emerald-400 hover:underline text-[11px] font-medium shrink-0">
-                  {keyCopied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
+      {/* Agent trust */}
+      <section className={cardCls}>
+        <div className={headCls}>
+          <h2 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+            <KeyRound size={16} className="text-neutral-500" />
+            <span>Agent Trust: Controller Signing Key</span>
+          </h2>
+          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+            Shutdown commands are signed with this Ed25519 key. Add the public key to each Agent's <code>trusted_controllers</code>.
+          </p>
+        </div>
+        {controllerKey ? (
+          <div className="space-y-1.5">
+            {row('Key id', controllerKey.key_id)}
+            {row('Algorithm', controllerKey.algorithm)}
+            <div className="flex items-start justify-between gap-3 pt-1">
+              <span className="font-mono text-[11px] break-all text-neutral-700 dark:text-neutral-300 select-all">{controllerKey.public_key}</span>
+              <button type="button" onClick={copyKey} className="text-emerald-600 dark:text-emerald-400 hover:underline text-[11px] font-medium shrink-0">
+                {keyCopied ? 'Copied' : 'Copy'}
+              </button>
             </div>
-          ) : (
-            <p className="text-[11px] text-neutral-400">{controllerKeyError ?? 'Loading…'}</p>
-          )}
-        </section>
-      )}
+          </div>
+        ) : (
+          <p className="text-[11px] text-neutral-400">{controllerKeyError ?? 'Loading…'}</p>
+        )}
+      </section>
 
       {/* Browser preferences */}
       <form onSubmit={handleSave} className={cardCls}>

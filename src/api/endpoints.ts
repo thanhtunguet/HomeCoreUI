@@ -1,4 +1,8 @@
-/** One function per operationId of api/openapi.yaml. */
+/**
+ * One function per operationId of api/openapi.yaml, named exactly like the operation (the contract
+ * test in `endpoints.contract.test.ts` checks method and path of every function against the spec).
+ * There are no roles: every authenticated user may call every operation.
+ */
 import { request } from './client';
 import type {
   AgentBinding,
@@ -6,6 +10,9 @@ import type {
   ApiDdnsConfig,
   ApiDevice,
   ApiSystemMetrics,
+  CloudflareLookup,
+  CloudflareRecord,
+  CloudflareZone,
   CommandStatus,
   ControllerKey,
   DdnsConfigCreate,
@@ -73,10 +80,22 @@ export const getSystemMetrics = () => request<ApiSystemMetrics>('/api/v1/system/
 export const getSystemInfo = () => request<SystemInfo>('/api/v1/system/info');
 export const getControllerKey = () => request<ControllerKey>('/api/v1/system/controller-key');
 
-// ddns (admin only)
+// ddns
 export const listDdnsConfigs = () => request<{ items: ApiDdnsConfig[] }>('/api/v1/ddns').then(r => r.items);
 export const createDdnsConfig = (body: DdnsConfigCreate) => request<ApiDdnsConfig>('/api/v1/ddns', { method: 'POST', body });
 export const updateDdnsConfig = (id: string, body: DdnsConfigUpdate) =>
   request<ApiDdnsConfig>(`/api/v1/ddns/${id}`, { method: 'PATCH', body });
 export const deleteDdnsConfig = (id: string) => request<void>(`/api/v1/ddns/${id}`, { method: 'DELETE' });
 export const syncDdnsConfig = (id: string) => request<DdnsSyncResult>(`/api/v1/ddns/${id}/sync`, { method: 'POST' });
+/**
+ * Cloudflare lookups for the DDNS form's dropdowns. POST only so the token travels in the body;
+ * they change nothing. The Controller answers 501 until the Cloudflare provider exists (Phase 4)
+ * and 502 (`cloudflare_error`, message = Cloudflare's reason) when Cloudflare refuses the token.
+ */
+export const listCloudflareZones = (lookup: CloudflareLookup) =>
+  request<{ items: CloudflareZone[] }>('/api/v1/ddns/cloudflare/zones', { method: 'POST', body: lookup }).then(r => r.items);
+export const listCloudflareRecords = (zoneId: string, lookup: CloudflareLookup) =>
+  request<{ items: CloudflareRecord[] }>(`/api/v1/ddns/cloudflare/zones/${encodeURIComponent(zoneId)}/records`, {
+    method: 'POST',
+    body: lookup,
+  }).then(r => r.items);

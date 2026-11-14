@@ -1,228 +1,72 @@
 /**
- * Wire types of the HomeCore Controller REST API.
+ * Wire types of the HomeCore Controller REST API: friendly names for the types generated from
+ * `api/openapi.yaml` (see `./generated/schema.d.ts`, `npm run gen:api`).
  *
- * Hand-maintained mirror of `api/openapi.yaml` in the SmartHomeCore repository (the spec is the
- * source of truth). Keep field names exactly as on the wire (snake_case); the UI model lives in
- * `src/types` and is converted in `mappers.ts`.
+ * The spec is the source of truth: do not hand-write wire types here. Field names stay exactly as
+ * on the wire (snake_case); the UI model lives in `src/types` and is converted in `mappers.ts`.
  *
- * Last synced with openapi.yaml 0.1.0 (2026-11-12, incl. device_type/os, last_latency_ms, DELETE /devices/{id}/agent,
- * GET /system/info, extra SystemMetrics and DdnsConfig fields).
+ * Responses use `Readable<T>` (drops `writeOnly` fields such as `api_token`); request bodies use
+ * `Writable<T>` (drops `readOnly` fields such as `AgentBinding.status`, so a client cannot send them).
  */
+import type { components, Readable, Writable } from './generated/schema';
 
-export interface ApiErrorBody {
-  error: { code: string; message: string };
-}
+type Schemas = components['schemas'];
+type Res<K extends keyof Schemas> = Readable<Schemas[K]>;
+type Req<K extends keyof Schemas> = Writable<Schemas[K]>;
 
-export interface Health {
-  status: string;
-  /** Server clock (RFC 3339). */
-  time: string;
-  version: string;
-}
+export type ApiErrorBody = Schemas['Error'];
+export type Health = Res<'Health'>;
+export type Readiness = Res<'Readiness'>;
 
-export type Role = 'admin' | 'viewer';
+export type User = Res<'User'>;
+export type LoginRequest = Req<'LoginRequest'>;
+export type TokenPair = Res<'TokenPair'>;
 
-export interface User {
-  id: string;
-  username: string;
-  role: Role;
-}
+export type ApiDeviceStatus = Schemas['DeviceStatus'];
+export type PowerTransition = Schemas['PowerTransition'];
+export type DeviceType = Schemas['DeviceType'];
+export type OperatingSystem = Schemas['OperatingSystem'];
 
-export interface LoginRequest {
-  username: string;
-  password: string;
-}
+/** Agent binding as returned by the API (with the read-only `status`, `version`, `last_ok_at`). */
+export type AgentBinding = Res<'AgentBinding'>;
+/** Agent binding as sent in a request body (`agent_id`, `port`, `scheme` only). */
+export type AgentBindingInput = Req<'AgentBinding'>;
+export type AgentStatus = NonNullable<AgentBinding['status']>;
 
-export interface TokenPair {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  /** Access token lifetime in seconds. */
-  expires_in: number;
-}
+export type Device = Res<'Device'>;
+export type ApiDevice = Device;
+export type DeviceCreate = Req<'DeviceCreate'>;
+export type DeviceUpdate = Req<'DeviceUpdate'>;
 
-export type ApiDeviceStatus = 'unknown' | 'online' | 'offline';
-export type PowerTransition = 'none' | 'waking' | 'shutting_down';
-
-export interface AgentBinding {
-  agent_id: string;
-  port: number;
-  scheme?: 'http' | 'https';
-}
-
-export type DeviceType = 'desktop' | 'server' | 'laptop' | 'tv' | 'nas' | 'iot' | 'router';
-export type OperatingSystem = 'windows' | 'linux' | 'macos' | 'android' | 'freebsd' | 'embedded';
-
-export interface ApiDevice {
-  id: string;
-  name: string;
-  description?: string;
-  hostname?: string;
-  ip_address: string;
-  mac_address?: string;
-  wol_broadcast_address?: string;
-  wol_port?: number;
-  /** Absent on Controllers older than the 0002 migration; treat as `desktop`. */
-  device_type?: DeviceType;
-  /** Absent on older Controllers; treat as `linux`. */
-  os?: OperatingSystem;
-  monitor_port: number;
-  monitor_interval_seconds: number;
-  monitor_timeout_ms: number;
-  enabled: boolean;
-  status: ApiDeviceStatus;
-  power_transition: PowerTransition;
-  agent?: AgentBinding;
-  last_seen_at?: string;
-  last_checked_at?: string;
-  /** Connect time of the most recent successful probe. */
-  last_latency_ms?: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DeviceCreate {
-  name: string;
-  description?: string;
-  hostname?: string;
-  ip_address: string;
-  mac_address?: string;
-  wol_broadcast_address?: string;
-  wol_port?: number;
-  device_type?: DeviceType;
-  os?: OperatingSystem;
-  monitor_port: number;
-  monitor_interval_seconds?: number;
-  monitor_timeout_ms?: number;
-  enabled?: boolean;
-  agent?: AgentBinding;
-}
-
-export type DeviceUpdate = Partial<DeviceCreate>;
-
+/** A cursor page: every list in the API has this shape (`items`, optional `next_cursor`). */
 export interface Page<T> {
   items: T[];
   next_cursor?: string;
 }
 
-export interface StatusChange {
-  status: ApiDeviceStatus;
-  previous_status?: ApiDeviceStatus;
-  changed_at: string;
-  reason?: string;
-}
+export type StatusChange = Res<'StatusChange'>;
+export type ProbeResult = Res<'ProbeResult'>;
 
-export interface ProbeResult {
-  device_id: string;
-  reachable: boolean;
-  latency_ms?: number;
-  status: ApiDeviceStatus;
-  checked_at: string;
-  error?: string;
-}
+export type CommandType = Schemas['CommandType'];
+export type CommandStatus = Schemas['CommandStatus'];
+export type Command = Res<'Command'>;
+export type ApiCommand = Command;
 
-export type CommandType = 'wake' | 'shutdown';
-export type CommandStatus = 'pending' | 'sent' | 'acknowledged' | 'completed' | 'failed' | 'timed_out';
+export type SystemMetrics = Res<'SystemMetrics'>;
+export type ApiSystemMetrics = SystemMetrics;
+export type SystemInfo = Res<'SystemInfo'>;
+export type ControllerKey = Res<'ControllerKey'>;
 
-export interface ApiCommand {
-  id: string;
-  device_id: string;
-  type: CommandType;
-  status: CommandStatus;
-  requested_by?: string;
-  error_code?: string;
-  error?: string;
-  deadline_at?: string;
-  completed_at?: string;
-  created_at: string;
-  updated_at: string;
-}
+export type DnsRecordType = Schemas['DnsRecordType'];
+export type DdnsConfig = Res<'DdnsConfig'>;
+export type ApiDdnsConfig = DdnsConfig;
+export type DdnsConfigCreate = Req<'DdnsConfigCreate'>;
+export type DdnsConfigUpdate = Req<'DdnsConfigUpdate'>;
+export type DdnsSyncResult = Res<'DdnsSyncResult'>;
 
-export interface ApiSystemMetrics {
-  collected_at: string;
-  /** e.g. `linux/arm64` */
-  platform: string;
-  hostname?: string;
-  uptime_seconds?: number;
-  cpu_percent?: number;
-  memory?: { total_bytes?: number; available_bytes?: number; used_bytes?: number };
-  disk?: { path?: string; total_bytes?: number; free_bytes?: number; used_bytes?: number };
-  local_ips?: string[];
-  cpu_cores?: number;
-  /** 1, 5, 15 minute averages. */
-  load_average?: number[];
-  kernel?: string;
-  /** Metric names this platform does not expose. */
-  restricted?: string[];
-  process?: { pid?: number; uptime_seconds?: number; rss_bytes?: number; goroutines?: number; heap_alloc_bytes?: number };
-}
-
-export interface SystemInfo {
-  version: string;
-  mode: 'controller' | 'agent' | 'both';
-  listen?: string;
-  tls?: boolean;
-  api_docs?: boolean;
-  access_token_ttl_seconds?: number;
-  refresh_token_ttl_seconds?: number;
-  retention_days?: number;
-  monitor_defaults?: { interval_seconds?: number; timeout_ms?: number; offline_threshold?: number };
-  command_deadlines?: { wake_seconds?: number; shutdown_seconds?: number };
-}
-
-export interface ControllerKey {
-  key_id: string;
-  algorithm: 'ed25519';
-  /** Standard base64 of the 32-byte public key. */
-  public_key: string;
-}
-
-export type DnsRecordType = 'A' | 'AAAA';
-
-export interface ApiDdnsConfig {
-  id: string;
-  name: string;
-  zone_id: string;
-  record_name: string;
-  record_type: DnsRecordType;
-  proxied: boolean;
-  /** 1 = automatic */
-  ttl: number;
-  interval_seconds: number;
-  enabled: boolean;
-  has_api_token: boolean;
-  last_ip?: string;
-  /** Public address found by the latest discovery run. */
-  detected_ip?: string;
-  /** Content of the Cloudflare record as last read. */
-  dns_value?: string;
-  last_checked_at?: string;
-  last_synced_at?: string;
-  last_error?: string;
-  last_error_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DdnsConfigCreate {
-  name: string;
-  zone_id: string;
-  record_name: string;
-  record_type: DnsRecordType;
-  proxied?: boolean;
-  ttl?: number;
-  interval_seconds?: number;
-  enabled?: boolean;
-  /** Write-only. */
-  api_token: string;
-}
-
-export type DdnsConfigUpdate = Partial<DdnsConfigCreate>;
-
-export interface DdnsSyncResult {
-  config_id: string;
-  result: 'updated' | 'unchanged' | 'failed';
-  ip?: string;
-  error?: string;
-  synced_at: string;
-}
+/** Exactly one of `api_token` (typed in the form, not saved yet) or `config_id` (stored token). */
+export type CloudflareLookup =
+  | { api_token: string; config_id?: never }
+  | { config_id: string; api_token?: never };
+export type CloudflareZone = Res<'CloudflareZone'>;
+export type CloudflareRecord = Res<'CloudflareRecord'>;

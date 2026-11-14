@@ -13,6 +13,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    /** `Retry-After` of a 429, in seconds. */
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -27,6 +29,10 @@ export class ApiError extends Error {
   }
   get forbidden() {
     return this.status === 403;
+  }
+  /** `429 rate_limited`: not a failure of the operation, retry after `retryAfterSeconds`. */
+  get rateLimited() {
+    return this.status === 429;
   }
   get network() {
     return this.status === 0;
@@ -69,11 +75,14 @@ async function parseError(res: Response): Promise<ApiError> {
   } catch {
     /* non-JSON body (e.g. proxy error page) */
   }
+  let retryAfter: number | undefined;
   if (res.status === 429) {
     const retry = res.headers.get('Retry-After');
+    const n = retry === null ? NaN : Number(retry);
+    if (Number.isFinite(n) && n >= 0) retryAfter = n;
     message = `${message}${retry ? ` (retry in ${retry}s)` : ''}`;
   }
-  return new ApiError(res.status, code, message);
+  return new ApiError(res.status, code, message, retryAfter);
 }
 
 async function send(path: string, opts: RequestOptions, token: string | null): Promise<Response> {

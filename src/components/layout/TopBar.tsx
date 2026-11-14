@@ -28,8 +28,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     setDeviceModalOpen,
     setEditingDevice,
     triggerDDNSSync,
-    ddnsConfig,
-    canManage
+    ddnsConfig
   } = useApp();
 
   const getTabTitle = () => {
@@ -111,7 +110,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
 
         {/* Tab-Contextual Primary Action */}
-        {activeTab === 'ddns' && canManage ? (
+        {activeTab === 'ddns' ? (
           <button
             onClick={() => triggerDDNSSync()}
             disabled={!ddnsConfig || ddnsConfig.status === 'updating'}
@@ -120,7 +119,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <RefreshCw size={14} className={ddnsConfig?.status === 'updating' ? 'animate-spin' : ''} />
             <span>Sync DNS</span>
           </button>
-        ) : canManage ? (
+        ) : (
           <button
             onClick={() => {
               setEditingDevice(null);
@@ -131,7 +130,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <Plus size={14} />
             <span>Add Device</span>
           </button>
-        ) : null}
+        )}
       </div>
     </header>
   );

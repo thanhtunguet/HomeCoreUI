@@ -33,7 +33,7 @@ export const DashboardScreen: React.FC = () => {
     startWakeFlow,
     requestShutdownConfirmation,
     triggerDDNSSync,
-    canManage
+    isPowerLocked
   } = useApp();
 
   const offlineCount = devices.filter(d => d.status === 'offline').length;
@@ -99,7 +99,7 @@ export const DashboardScreen: React.FC = () => {
             {ddnsConfig?.detectedIp ?? ddnsConfig?.lastIp ?? '—'}
           </div>
           <div className={`text-[11px] mt-1 flex items-center gap-1 truncate ${ddnsConfig?.status === 'error' ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
-            <span>{ddnsConfig ? { synced: 'Cloudflare Synced', error: 'Last sync failed', updating: 'Syncing…', never_synced: 'Not synced yet', disabled: 'Sync disabled' }[ddnsConfig.status] : canManage ? 'No DDNS record' : 'Admin only'}</span>
+            <span>{ddnsConfig ? { synced: 'Cloudflare Synced', error: 'Last sync failed', updating: 'Syncing…', never_synced: 'Not synced yet', disabled: 'Sync disabled' }[ddnsConfig.status] : 'No DDNS record'}</span>
             {ddnsConfig && <span>·</span>}
             {ddnsConfig && <span className="font-mono">{ddnsConfig.recordName}</span>}
           </div>
@@ -193,12 +193,12 @@ export const DashboardScreen: React.FC = () => {
 
                 <div className="flex items-center gap-1">
                   {/* Wake Action */}
-                  {canManage && device.wol.enabled && device.status !== 'online' && (
+                  {device.wol.enabled && device.status !== 'online' && (
                     <button
                       onClick={() => startWakeFlow(device)}
-                      disabled={device.powerTransition !== 'none'}
+                      disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                       title="Send Wake-on-LAN Packet"
-                      className="px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 rounded flex items-center gap-1 transition-colors"
+                      className="disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 rounded flex items-center gap-1 transition-colors"
                     >
                       <Zap size={11} className="text-emerald-500" />
                       <span>Wake</span>
@@ -206,12 +206,12 @@ export const DashboardScreen: React.FC = () => {
                   )}
 
                   {/* Shutdown Action */}
-                  {canManage && device.shutdown.enabled && device.status === 'online' && (
+                  {device.shutdown.enabled && device.status === 'online' && (
                     <button
                       onClick={() => requestShutdownConfirmation(device)}
-                      disabled={device.powerTransition !== 'none'}
+                      disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                       title="Initiate Remote Shutdown"
-                      className="px-2 py-1 text-[11px] font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded flex items-center gap-1 transition-colors"
+                      className="disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 text-[11px] font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded flex items-center gap-1 transition-colors"
                     >
                       <Power size={11} className="text-red-500" />
                       <span>Shutdown</span>
@@ -245,7 +245,7 @@ export const DashboardScreen: React.FC = () => {
                   Cloudflare DDNS Alias
                 </h2>
               </div>
-              {ddnsConfig && canManage && (
+              {ddnsConfig && (
                 <button
                   onClick={() => triggerDDNSSync(ddnsConfig.id)}
                   disabled={ddnsConfig.status === 'updating'}
@@ -300,7 +300,7 @@ export const DashboardScreen: React.FC = () => {
               </>
             ) : (
               <p className="py-4 text-xs text-neutral-500 dark:text-neutral-400">
-                {canManage ? 'No Cloudflare DDNS record is configured yet.' : 'DDNS is managed by administrators.'}
+                No Cloudflare DDNS record is configured yet.
               </p>
             )}
           </div>

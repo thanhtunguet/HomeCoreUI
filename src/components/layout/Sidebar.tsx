@@ -34,7 +34,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     systemMetrics,
     connectionIssue,
     username,
-    role,
     logout
   } = useApp();
 
@@ -155,8 +154,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="flex items-center justify-between px-2.5 py-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-              <span className="truncate" title={`Signed in as ${username} (${role})`}>
-                {username} · {role}
+              <span className="truncate" title={`Signed in as ${username}`}>
+                {username}
               </span>
               <button
                 onClick={() => void logout()}

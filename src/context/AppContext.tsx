@@ -16,14 +16,14 @@ import type {
   ApiDevice,
   ApiSystemMetrics,
   ControllerKey,
-  DdnsConfigCreate,
-  DdnsConfigUpdate,
   Health
 } from '../api/schema';
-import { commandToActivity, needsAgentRemoval, toDDNSConfig, toDevice, toDeviceCreate, toDeviceUpdate, toSystemMetrics } from '../api/mappers';
+import { buildDdnsCreate, buildDdnsUpdate, commandToActivity, type DdnsDraft, needsAgentRemoval, toDDNSConfig, toDevice, toDeviceCreate, toDeviceUpdate, toSystemMetrics } from '../api/mappers';
 import { migrateLegacyDeviceMeta } from '../api/deviceMeta';
 import { clockTime } from '../api/format';
+import { isTerminal, pollCommand as followCommand } from '../api/commandPoll';
 import { usePolling } from '../hooks/usePolling';
+import { usePowerCooldown } from '../hooks/usePowerCooldown';
 import { useAuth } from './AuthContext';
 
 type Tab = 'dashboard' | 'devices' | 'ddns' | 'activity' | 'system' | 'settings';
@@ -34,15 +34,12 @@ export interface Toast {
   message: string;
 }
 
-/** Fields of a DDNS form; `api_token` is only sent when the user typed one. */
-export type DDNSDraft = Omit<DdnsConfigCreate, 'api_token'> & { api_token?: string };
+/** Fields of a DDNS form (see `DdnsDraft`); `api_token` is only sent when the user typed one. */
+export type DDNSDraft = DdnsDraft;
 
 interface AppContextType {
   // Session
   username: string;
-  role: 'admin' | 'viewer';
-  /** Admin role: may create/edit devices, wake, shutdown and manage DDNS. */
-  canManage: boolean;
   logout: () => Promise<void>;
   serverHealth: Health | null;
   /** Worst current API problem (unreachable, 501, ...) for the status banner. */
@@ -75,6 +72,12 @@ interface AppContextType {
   probeDevice: (id: string) => Promise<boolean>;
   refreshDevices: () => Promise<void>;
 
+  /**
+   * True for one second after a wake/shutdown request for this device (the API allows one per
+   * device per second): use it to disable that device's wake/shutdown buttons.
+   */
+  isPowerLocked: (deviceId: string) => boolean;
+
   // Asynchronous flows (driven by the Controller's command state machine)
   wakeFlow: WakeFlowState;
   startWakeFlow: (device: Device) => void;
@@ -85,7 +88,7 @@ interface AppContextType {
   confirmAndExecuteShutdown: () => void;
   cancelShutdownFlow: () => void;
 
-  // DDNS (admin only on the API)
+  // DDNS
   ddnsConfigs: DDNSConfig[];
   /** The record shown on the dashboard / DDNS screen (selected, else the first). */
   ddnsConfig: DDNSConfig | null;
@@ -127,53 +130,26 @@ const DEFAULT_SETTINGS: AppSettings = {
   monitoring: { defaultIntervalSec: 30, defaultTimeoutMs: 2000 }
 };
 
-const TERMINAL: ReadonlySet<ApiCommand['status']> = new Set(['completed', 'failed', 'timed_out']);
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
 export function errMsg(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.notImplemented) return 'Not implemented by the Controller yet (501).';
-    if (e.forbidden) return 'Your account does not have the admin role required for this action.';
+    if (e.forbidden) return `The Controller refused this request (403): ${e.message}`;
     return e.message;
   }
   return e instanceof Error ? e.message : String(e);
 }
 
-/**
- * Poll a command until it reaches a terminal state. Returns null when superseded (`isCurrent`
- * false) and the last known command if the client gives up waiting.
- */
-async function pollCommand(
-  first: ApiCommand,
-  isCurrent: () => boolean,
-  onUpdate: (c: ApiCommand) => void
-): Promise<ApiCommand | null> {
-  let cmd = first;
-  const waitMs = cmd.deadline_at ? Math.max(0, Date.parse(cmd.deadline_at) - Date.now()) : 180_000;
-  const giveUpAt = Date.now() + waitMs + 30_000;
-  let failures = 0;
-  onUpdate(cmd);
-  while (isCurrent() && !TERMINAL.has(cmd.status)) {
-    if (Date.now() > giveUpAt) return cmd;
-    await sleep(1500);
-    if (!isCurrent()) return null;
-    try {
-      cmd = await api.getCommand(cmd.id);
-      failures = 0;
-      onUpdate(cmd);
-    } catch (e) {
-      if (++failures >= 5) throw e;
-    }
-  }
-  return isCurrent() ? cmd : null;
-}
+const follow = (first: ApiCommand, isCurrent: () => boolean, onUpdate: (c: ApiCommand) => void) =>
+  followCommand(first, isCurrent, onUpdate, { fetchCommand: api.getCommand });
+
+const tooManyRequests = (deviceName: string) => `Too many requests for ${deviceName}, wait a second`;
 
 const idleWake: WakeFlowState = { active: false, deviceId: null, deviceName: '', step: 'idle', message: '', progressPercent: 0, logs: [] };
 const idleShutdown: ShutdownFlowState = { active: false, deviceId: null, deviceName: '', step: 'idle', message: '', progressPercent: 0, logs: [] };
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const auth = useAuth();
-  const canManage = auth.isAdmin;
+  const powerCooldown = usePowerCooldown();
 
   // Navigation
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -267,12 +243,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // One-time carry-over of browser-local device type/OS to the Controller (GAP-API-01).
   const metaMigrated = useRef(false);
   useEffect(() => {
-    if (!canManage || !devicesLoaded || metaMigrated.current) return;
+    if (!devicesLoaded || metaMigrated.current) return;
     metaMigrated.current = true;
     void migrateLegacyDeviceMeta(apiDevices, (id, meta) => api.updateDevice(id, meta)).then(moved => {
       if (moved > 0) void refreshDevices().catch(() => undefined);
     });
-  }, [canManage, devicesLoaded, apiDevices, refreshDevices]);
+  }, [devicesLoaded, apiDevices, refreshDevices]);
 
   const refreshCommands = useCallback(async () => {
     try {
@@ -311,18 +287,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   usePolling(refreshDevices, 10_000);
   usePolling(refreshCommands, 15_000);
   usePolling(refreshSystemMetrics, 10_000);
-  usePolling(refreshDdns, 30_000, canManage); // the DDNS API is admin only
+  usePolling(refreshDdns, 30_000);
   usePolling(refreshHealth, 60_000);
 
   const loadControllerKey = useCallback(async () => {
-    if (!canManage) return;
     try {
       setControllerKey(await api.getControllerKey());
       setControllerKeyError(null);
     } catch (e) {
       setControllerKeyError(errMsg(e));
     }
-  }, [canManage]);
+  }, []);
 
   // ---- Activity --------------------------------------------------------------------------
   const addActivity = useCallback((event: Omit<ActivityEvent, 'id' | 'timestamp'>) => {
@@ -448,8 +423,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const wakeRun = useRef(0);
 
   const startWakeFlow = async (device: Device) => {
-    if (!canManage) {
-      pushToast('error', 'Wake-on-LAN requires the admin role.');
+    // At most one wake/shutdown request per device per second (the Controller answers 429 otherwise).
+    if (!powerCooldown.tryAcquire(device.id)) {
+      pushToast('info', tooManyRequests(device.name));
       return;
     }
     const run = ++wakeRun.current;
@@ -473,8 +449,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const first = await api.wakeDevice(device.id);
       log(`POST /devices/${device.id}/wake -> 202, command ${first.id}`);
+      // Idempotent API: an already-active wake is returned as is, and waking an online device
+      // answers with a command that is already `completed`. Neither is an error.
+      const immediate = isTerminal(first);
       let last: ApiCommand['status'] | undefined;
-      const final = await pollCommand(first, isCurrent, c => {
+      const final = await follow(first, isCurrent, c => {
         if (c.status === last) return;
         last = c.status;
         if (c.status === 'pending') {
@@ -492,9 +471,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       void refreshDevices().catch(() => undefined);
       void refreshCommands().catch(() => undefined);
       if (final.status === 'completed') {
-        set({ step: 'online_confirmed', message: `Device started! Verified TCP connection on port ${device.monitoring.port}.`, progressPercent: 100 });
-        log('Device status confirmed ONLINE by the monitor.');
-      } else if (final.status === 'timed_out' || !TERMINAL.has(final.status)) {
+        set({
+          step: 'online_confirmed',
+          message: immediate ? 'The device is already online. Nothing to do.' : `Device started! Verified TCP connection on port ${device.monitoring.port}.`,
+          progressPercent: 100
+        });
+        log(immediate ? 'Device is already ONLINE; no packet was sent.' : 'Device status confirmed ONLINE by the monitor.');
+      } else if (final.status === 'timed_out' || !isTerminal(final)) {
         set({ step: 'packet_sent_probing_timeout', message: 'Packet sent, but the device did not come online before the deadline.', progressPercent: 70 });
         log('Deadline passed without an online probe. The machine may need more time, or WOL is disabled in its BIOS/NIC.');
       } else {
@@ -502,6 +485,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         log(`FAILED${final.error_code ? ` (${final.error_code})` : ''}: ${final.error ?? 'unknown error'}`);
       }
     } catch (e) {
+      if (e instanceof ApiError && e.rateLimited) {
+        // Throttled, not failed: another request for this device was handled a moment ago.
+        powerCooldown.hold(device.id, (e.retryAfterSeconds ?? 1) * 1000);
+        setWakeFlow(prev => (isCurrent() ? idleWake : prev));
+        pushToast('info', tooManyRequests(device.name));
+        return;
+      }
       set({ step: 'failed', message: errMsg(e), progressPercent: 15 });
       log(`FAILED: ${errMsg(e)}`);
     }
@@ -517,10 +507,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const shutdownRun = useRef(0);
 
   const requestShutdownConfirmation = (device: Device) => {
-    if (!canManage) {
-      pushToast('error', 'Shutdown requires the admin role.');
-      return;
-    }
     shutdownRun.current++;
     setShutdownFlow({
       active: true,
@@ -539,6 +525,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const confirmAndExecuteShutdown = async () => {
     const target = devices.find(d => d.id === shutdownFlow.deviceId);
     if (!target) return;
+    // At most one wake/shutdown request per device per second; stay on the confirmation step.
+    if (!powerCooldown.tryAcquire(target.id)) {
+      pushToast('info', tooManyRequests(target.name));
+      return;
+    }
     const run = ++shutdownRun.current;
     const isCurrent = () => shutdownRun.current === run;
     const log = (line: string) => setShutdownFlow(prev => (isCurrent() ? { ...prev, logs: [...prev.logs, `[${clockTime()}] ${line}`] } : prev));
@@ -548,9 +539,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const first = await api.shutdownDevice(target.id);
       log(`POST /devices/${target.id}/shutdown -> 202, command ${first.id}`);
+      // Idempotent API: an already-active shutdown is returned as is, and shutting down an offline
+      // device answers with a command that is already `completed`. Neither is an error.
+      const immediate = isTerminal(first);
       let last: ApiCommand['status'] | undefined;
       let ackSeen = false;
-      const final = await pollCommand(first, isCurrent, c => {
+      const final = await follow(first, isCurrent, c => {
         if (c.status === last) return;
         last = c.status;
         if (c.status === 'pending') {
@@ -567,9 +561,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       void refreshDevices().catch(() => undefined);
       void refreshCommands().catch(() => undefined);
       if (final.status === 'completed') {
-        set({ step: 'offline_verified', message: 'Device successfully powered off and confirmed offline.', progressPercent: 100 });
-        log('Device status confirmed OFFLINE by the monitor.');
-      } else if (final.status === 'timed_out' || !TERMINAL.has(final.status)) {
+        set({
+          step: 'offline_verified',
+          message: immediate ? 'The device is already offline. Nothing to do.' : 'Device successfully powered off and confirmed offline.',
+          progressPercent: 100
+        });
+        log(immediate ? 'Device is already OFFLINE; the agent was not contacted.' : 'Device status confirmed OFFLINE by the monitor.');
+      } else if (final.status === 'timed_out' || !isTerminal(final)) {
         set({
           step: 'failed',
           message: ackSeen ? 'The agent accepted the command but the device is still online after the deadline.' : 'The agent did not respond before the deadline.',
@@ -581,6 +579,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         log(`FAILED${final.error_code ? ` (${final.error_code})` : ''}: ${final.error ?? 'unknown error'}`);
       }
     } catch (e) {
+      if (e instanceof ApiError && e.rateLimited) {
+        // Throttled, not failed: back to the confirmation so the user can retry in a moment.
+        powerCooldown.hold(target.id, (e.retryAfterSeconds ?? 1) * 1000);
+        set({ step: 'confirming', message: `Are you sure you want to shut down ${target.name}? Unsaved work will be lost.`, progressPercent: 10 });
+        pushToast('info', tooManyRequests(target.name));
+        return;
+      }
       set({ step: 'failed', message: errMsg(e), progressPercent: 30 });
       log(`FAILED: ${errMsg(e)}`);
     }
@@ -606,10 +611,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
   const triggerDDNSSync = async (id?: string) => {
-    if (!canManage) {
-      pushToast('error', 'DDNS is available to administrators only.');
-      return;
-    }
     const target = id ?? ddnsConfig?.id;
     if (!target) {
       pushToast('info', 'No DDNS record is configured yet.');
@@ -640,15 +641,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const saveDdns = async (id: string | null, draft: DDNSDraft): Promise<string | null> => {
     try {
-      let saved: ApiDdnsConfig;
-      if (id) {
-        const patch: DdnsConfigUpdate = { ...draft };
-        if (!patch.api_token) delete patch.api_token; // keep the stored token
-        saved = await api.updateDdnsConfig(id, patch);
-      } else {
-        if (!draft.api_token) return 'A Cloudflare API token is required.';
-        saved = await api.createDdnsConfig({ ...draft, api_token: draft.api_token });
-      }
+      const saved: ApiDdnsConfig = id
+        ? await api.updateDdnsConfig(id, buildDdnsUpdate(draft))
+        : await api.createDdnsConfig(buildDdnsCreate(draft));
       setApiDdns(prev => (prev.some(c => c.id === saved.id) ? prev.map(c => (c.id === saved.id ? saved : c)) : [...prev, saved]));
       setActiveDdnsId(saved.id);
       addActivity({
@@ -692,8 +687,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider
       value={{
         username: auth.user?.username ?? '',
-        role: auth.user?.role ?? 'viewer',
-        canManage,
         logout: auth.logout,
         serverHealth,
         connectionIssue,
@@ -719,6 +712,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deleteDevice,
         probeDevice,
         refreshDevices,
+        isPowerLocked: powerCooldown.isLocked,
         wakeFlow,
         startWakeFlow,
         cancelWakeFlow,

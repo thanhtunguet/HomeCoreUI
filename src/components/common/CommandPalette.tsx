@@ -31,7 +31,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     startWakeFlow,
     requestShutdownConfirmation,
     triggerDDNSSync,
-    canManage
+    isPowerLocked
   } = useApp();
 
   const [query, setQuery] = useState('');
@@ -169,28 +169,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               </button>
 
               <div className="flex items-center gap-1 shrink-0 ml-2">
-                {canManage && device.wol.enabled && (
+                {device.wol.enabled && (
                   <button
-                    disabled={device.powerTransition !== 'none'}
+                    disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                     onClick={() => {
                       startWakeFlow(device);
                       onClose();
                     }}
                     title="Wake-on-LAN"
-                    className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded"
+                    className="disabled:opacity-50 disabled:cursor-not-allowed p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded"
                   >
                     <Zap size={14} />
                   </button>
                 )}
-                {canManage && device.shutdown.enabled && device.status === 'online' && (
+                {device.shutdown.enabled && device.status === 'online' && (
                   <button
-                    disabled={device.powerTransition !== 'none'}
+                    disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                     onClick={() => {
                       requestShutdownConfirmation(device);
                       onClose();
                     }}
                     title="Shutdown"
-                    className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded"
+                    className="disabled:opacity-50 disabled:cursor-not-allowed p-1.5 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded"
                   >
                     <Power size={14} />
                   </button>

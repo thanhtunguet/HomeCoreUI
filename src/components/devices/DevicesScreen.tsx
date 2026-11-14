@@ -31,7 +31,7 @@ export const DevicesScreen: React.FC = () => {
     startWakeFlow,
     requestShutdownConfirmation,
     deleteDevice,
-    canManage
+    isPowerLocked
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -99,7 +99,7 @@ export const DevicesScreen: React.FC = () => {
           </div>
 
           {/* Add Device Button */}
-          {canManage && <button
+          <button
             onClick={() => {
               setEditingDevice(null);
               setDeviceModalOpen(true);
@@ -108,7 +108,7 @@ export const DevicesScreen: React.FC = () => {
           >
             <Plus size={14} />
             <span>Add Device</span>
-          </button>}
+          </button>
         </div>
       </div>
 
@@ -213,12 +213,12 @@ export const DevicesScreen: React.FC = () => {
 
                   <div className="flex items-center gap-1.5">
                     {/* Wake Action */}
-                    {canManage && (device.wol.enabled ? (
+                    {device.wol.enabled ? (
                       <button
                         onClick={() => startWakeFlow(device)}
-                        disabled={device.powerTransition !== 'none'}
+                        disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                         title="Dispatch Wake-on-LAN Magic Packet"
-                        className={`px-2.5 py-1 text-xs font-medium rounded-lg flex items-center gap-1 transition-colors ${
+                        className={`disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 text-xs font-medium rounded-lg flex items-center gap-1 transition-colors ${
                           device.status !== 'online'
                             ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20'
                             : 'text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800'
@@ -234,15 +234,15 @@ export const DevicesScreen: React.FC = () => {
                       >
                         WOL off
                       </span>
-                    ))}
+                    )}
 
                     {/* Remote Shutdown Action */}
-                    {canManage && (device.shutdown.enabled && device.status === 'online' ? (
+                    {device.shutdown.enabled && device.status === 'online' ? (
                       <button
                         onClick={() => requestShutdownConfirmation(device)}
-                        disabled={device.powerTransition !== 'none'}
+                        disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                         title="Send Remote Shutdown Command via Agent"
-                        className="px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg flex items-center gap-1 transition-colors"
+                        className="disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg flex items-center gap-1 transition-colors"
                       >
                         <Power size={13} className="text-red-500" />
                         <span>Power</span>
@@ -258,7 +258,7 @@ export const DevicesScreen: React.FC = () => {
                       >
                         Pwr n/a
                       </span>
-                    ))}
+                    )}
 
                     {/* Single Check Probe */}
                     <button
@@ -339,23 +339,23 @@ export const DevicesScreen: React.FC = () => {
 
                       <td className="py-3 px-4 text-right" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
-                          {canManage && device.wol.enabled && (
+                          {device.wol.enabled && (
                             <button
                               onClick={() => startWakeFlow(device)}
-                              disabled={device.powerTransition !== 'none'}
+                              disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                               title="Wake-on-LAN"
-                              className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded"
+                              className="disabled:opacity-50 disabled:cursor-not-allowed p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 rounded"
                             >
                               <Zap size={14} />
                             </button>
                           )}
 
-                          {canManage && device.shutdown.enabled && device.status === 'online' && (
+                          {device.shutdown.enabled && device.status === 'online' && (
                             <button
                               onClick={() => requestShutdownConfirmation(device)}
-                              disabled={device.powerTransition !== 'none'}
+                              disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
                               title="Remote Shutdown"
-                              className="p-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded"
+                              className="disabled:opacity-50 disabled:cursor-not-allowed p-1 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded"
                             >
                               <Power size={14} />
                             </button>

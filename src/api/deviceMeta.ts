@@ -35,7 +35,7 @@ function writeAll(all: Record<string, LegacyMeta>): void {
 /**
  * For every locally stored entry: drop it if the device no longer exists or already matches the
  * server, otherwise send it with `push` and drop it after success. A failed push keeps the entry
- * for the next load. Needs the admin role (the caller checks).
+ * for the next load. Any authenticated session may do it (there are no roles).
  */
 export async function migrateLegacyDeviceMeta(
   devices: ReadonlyArray<{ id: string; device_type?: DeviceType; os?: OperatingSystem }>,

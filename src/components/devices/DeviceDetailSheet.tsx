@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { Device } from '../../types';
+import { formatRelative } from '../../api/format';
 import { StatusBadge } from '../common/StatusBadge';
 import { DeviceIcon } from '../common/DeviceIcon';
 import {
@@ -20,6 +21,20 @@ import {
   CheckCircle2
 } from 'lucide-react';
 
+/** Label for the agent row; says when the state is only a guess from the host status. */
+const agentStatusLabel = (s: Device['shutdown']): string => {
+  switch (s.agentStatus) {
+    case 'not_configured':
+      return 'Not Configured';
+    case 'ready':
+      return s.agentStatusSource === 'reported' ? 'Ready' : 'Bound (host online, inferred)';
+    case 'unreachable':
+      return s.agentStatusSource === 'reported' ? 'Unreachable' : 'Bound (host offline, inferred)';
+    default:
+      return 'Unknown (not contacted yet)';
+  }
+};
+
 interface DeviceDetailSheetProps {
   device: Device;
   onClose: () => void;
@@ -37,7 +52,7 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
     setDeviceModalOpen,
     deleteDevice,
     activities,
-    canManage
+    isPowerLocked
   } = useApp();
 
   const [probing, setProbing] = React.useState(false);
@@ -87,20 +102,20 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
           </div>
 
           <div className="flex items-center gap-1">
-            {canManage && <button
+            <button
               onClick={handleEdit}
               title="Edit Device Configuration"
               className="p-1.5 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <Edit2 size={16} />
-            </button>}
-            {canManage && <button
+            </button>
+            <button
               onClick={handleDelete}
               title="Delete Device"
               className="p-1.5 text-neutral-500 hover:text-red-600 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
               <Trash2 size={16} />
-            </button>}
+            </button>
             <button
               onClick={onClose}
               className="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 rounded-md"
@@ -124,11 +139,11 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
           </button>
 
           {/* Wake Button */}
-          {canManage && (device.wol.enabled ? (
+          {device.wol.enabled ? (
             <button
               onClick={() => startWakeFlow(device)}
-              disabled={device.powerTransition !== 'none'}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-colors"
+              disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
+              className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-colors"
             >
               <Zap size={14} className="text-emerald-500" />
               <span>Wake Device</span>
@@ -141,14 +156,14 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
               <Zap size={14} />
               <span>WOL Disabled</span>
             </div>
-          ))}
+          )}
 
           {/* Shutdown Button */}
-          {canManage && (device.shutdown.enabled && device.status === 'online' ? (
+          {device.shutdown.enabled && device.status === 'online' ? (
             <button
               onClick={() => requestShutdownConfirmation(device)}
-              disabled={device.powerTransition !== 'none'}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors"
+              disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
+              className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors"
             >
               <Power size={14} className="text-red-500" />
               <span>Shutdown</span>
@@ -165,7 +180,7 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
               <Power size={14} />
               <span>Shutdown N/A</span>
             </div>
-          ))}
+          )}
         </div>
 
         {/* Scrollable Content */}
@@ -280,16 +295,23 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
             <div className="bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3.5 space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-neutral-500 dark:text-neutral-400">Agent Status</span>
-                <span className={`font-medium ${
-                  device.shutdown.agentStatus === 'ready'
-                    ? 'text-emerald-500'
-                    : device.shutdown.agentStatus === 'unreachable'
-                    ? 'text-amber-500'
-                    : 'text-neutral-400'
-                }`}>
-                  {device.shutdown.agentStatus === 'ready' && 'Bound (host online)'}
-                  {device.shutdown.agentStatus === 'unreachable' && 'Bound (host offline)'}
-                  {device.shutdown.agentStatus === 'not_configured' && 'Not Configured'}
+                <span
+                  className={`font-medium ${
+                    device.shutdown.agentStatus === 'ready'
+                      ? 'text-emerald-500'
+                      : device.shutdown.agentStatus === 'unreachable'
+                      ? 'text-amber-500'
+                      : 'text-neutral-400'
+                  }`}
+                  title={
+                    device.shutdown.agentStatusSource === 'reported'
+                      ? 'Reported by the Controller (last contact with the agent)'
+                      : device.shutdown.enabled
+                      ? 'Inferred from the host status: the Controller does not report agent health yet'
+                      : undefined
+                  }
+                >
+                  {agentStatusLabel(device.shutdown)}
                 </span>
               </div>
               {device.shutdown.enabled && (
@@ -306,6 +328,20 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
                       {device.shutdown.agentId}
                     </span>
                   </div>
+                  {device.shutdown.agentStatusSource === 'reported' && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500 dark:text-neutral-400">Agent Version</span>
+                        <span className="font-mono text-neutral-800 dark:text-neutral-200">{device.shutdown.agentVersion ?? '—'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500 dark:text-neutral-400">Last Contact</span>
+                        <span className="text-neutral-800 dark:text-neutral-200" title={device.shutdown.agentLastOkAt}>
+                          {formatRelative(device.shutdown.agentLastOkAt)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-neutral-500 dark:text-neutral-400">Command Auth</span>
                     <span className="text-neutral-800 dark:text-neutral-200">Ed25519 signed by Controller</span>

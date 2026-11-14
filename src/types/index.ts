@@ -34,8 +34,16 @@ export interface DeviceShutdown {
   agentId: string;
   agentPort: number;
   agentScheme: 'http' | 'https';
-  /** Inferred client-side from the binding and device status; the API does not report agent health. */
-  agentStatus: 'ready' | 'unreachable' | 'not_configured';
+  /**
+   * Reachability of the Agent. Taken from `agent.status` when the Controller reports it
+   * (`agentStatusSource` = 'reported'); otherwise inferred from the device status ('inferred').
+   */
+  agentStatus: 'ready' | 'unreachable' | 'unknown' | 'not_configured';
+  agentStatusSource: 'reported' | 'inferred';
+  /** Agent version from the last successful contact (reported by the Controller only). */
+  agentVersion?: string;
+  /** Last successful contact with the Agent, RFC 3339 (reported by the Controller only). */
+  agentLastOkAt?: string;
 }
 
 export interface Device {
@@ -65,6 +73,8 @@ export interface DDNSConfig {
   id: string;
   name: string;
   zoneId: string;
+  /** Cloudflare record id, chosen from the record lookup when the configuration was created. */
+  recordId: string;
   recordName: string;
   recordType: 'A' | 'AAAA';
   proxied: boolean;

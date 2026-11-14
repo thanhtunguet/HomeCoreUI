@@ -179,7 +179,8 @@ export const DeviceFormModal: React.FC = () => {
         agentId: agentId.trim(),
         agentPort: Number(agentPort),
         agentScheme,
-        agentStatus: shutdownEnabled ? 'ready' : 'not_configured'
+        agentStatus: shutdownEnabled ? 'unknown' : 'not_configured',
+        agentStatusSource: 'inferred'
       }
     });
     if (error) {

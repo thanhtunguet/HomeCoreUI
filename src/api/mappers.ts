@@ -16,6 +16,10 @@ import type {
   ApiDdnsConfig,
   ApiDevice,
   ApiSystemMetrics,
+  CloudflareLookup,
+  CloudflareRecord,
+  DdnsConfigCreate,
+  DdnsConfigUpdate,
   DeviceCreate,
   DeviceUpdate,
 } from './schema';
@@ -31,6 +35,27 @@ const PRESET_PORTS: Record<number, DeviceMonitoring['protocolPreset']> = {
 };
 
 export const presetForPort = (port: number): DeviceMonitoring['protocolPreset'] => PRESET_PORTS[port] ?? 'CUSTOM';
+
+/**
+ * Agent health: the Controller's `agent.status` when present, else a guess from the device status
+ * (bound + online = ready, bound + offline = unreachable) that the UI labels as inferred.
+ */
+export function agentState(d: Pick<ApiDevice, 'agent' | 'status'>): Pick<
+  Device['shutdown'],
+  'agentStatus' | 'agentStatusSource' | 'agentVersion' | 'agentLastOkAt'
+> {
+  const a = d.agent;
+  if (!a) return { agentStatus: 'not_configured', agentStatusSource: 'inferred' };
+  if (a.status) {
+    return { agentStatus: a.status, agentStatusSource: 'reported', agentVersion: a.version, agentLastOkAt: a.last_ok_at };
+  }
+  return {
+    agentStatus: d.status === 'online' ? 'ready' : 'unreachable',
+    agentStatusSource: 'inferred',
+    agentVersion: a.version,
+    agentLastOkAt: a.last_ok_at,
+  };
+}
 
 /** `latencyMs` is a fresher figure from a probe made in this session; it wins over the stored one. */
 export function toDevice(d: ApiDevice, latencyMs?: number): Device {
@@ -66,7 +91,7 @@ export function toDevice(d: ApiDevice, latencyMs?: number): Device {
       agentId: d.agent?.agent_id ?? '',
       agentPort: d.agent?.port ?? 9750,
       agentScheme: d.agent?.scheme ?? 'http',
-      agentStatus: !hasAgent ? 'not_configured' : d.status === 'online' ? 'ready' : 'unreachable',
+      ...agentState(d),
     },
     createdAt: d.created_at,
   };
@@ -224,6 +249,7 @@ export function toDDNSConfig(c: ApiDdnsConfig, updating = false): DDNSConfig {
     id: c.id,
     name: c.name,
     zoneId: c.zone_id,
+    recordId: c.record_id,
     recordName: c.record_name,
     recordType: c.record_type,
     proxied: c.proxied,
@@ -240,4 +266,77 @@ export function toDDNSConfig(c: ApiDdnsConfig, updating = false): DDNSConfig {
     lastErrorAt: c.last_error_at,
     status: state,
   };
+}
+
+/**
+ * Credentials for a Cloudflare lookup: a token typed in the form wins; otherwise the stored token
+ * of the configuration being edited (`config_id`); otherwise nothing can be looked up. The API
+ * wants exactly one of the two.
+ */
+export function cloudflareLookup(typedToken: string, storedConfig?: { id: string; hasApiToken: boolean } | null): CloudflareLookup | null {
+  const token = typedToken.trim();
+  if (token) return { api_token: token };
+  if (storedConfig?.hasApiToken) return { config_id: storedConfig.id };
+  return null;
+}
+
+/** The Cloudflare record a configuration points at: always the four fields together. */
+export type DdnsTarget = Pick<DdnsConfigCreate, 'zone_id' | 'record_id' | 'record_name' | 'record_type'>;
+
+/** What picking a record fills in: the target plus the record's own proxied/ttl as form defaults. */
+export function recordToDdnsFields(zoneId: string, r: CloudflareRecord): { target: DdnsTarget; proxied: boolean; ttl: number } {
+  return {
+    target: { zone_id: zoneId, record_id: r.id, record_name: r.name, record_type: r.type },
+    proxied: r.proxied,
+    ttl: r.ttl,
+  };
+}
+
+/**
+ * DDNS form state. Zone and record can only come from the Cloudflare lookup, so they live in one
+ * `target`: null while nothing is picked (a new configuration cannot be saved; an existing one
+ * keeps the record it already has).
+ */
+export interface DdnsDraft {
+  name: string;
+  proxied: boolean;
+  ttl: number;
+  interval_seconds: number;
+  enabled: boolean;
+  /** Write-only; blank = keep the stored token (update) / required (create). */
+  api_token?: string;
+  target: DdnsTarget | null;
+}
+
+/** POST body. Zone and record are mandatory and always sent together (the API requires `record_id`). */
+export function buildDdnsCreate(d: DdnsDraft): DdnsConfigCreate {
+  if (!d.target) throw new Error('Pick a zone and a record from Cloudflare first.');
+  if (!d.api_token) throw new Error('A Cloudflare API token is required.');
+  return {
+    name: d.name,
+    ...d.target,
+    proxied: d.proxied,
+    ttl: d.ttl,
+    interval_seconds: d.interval_seconds,
+    enabled: d.enabled,
+    api_token: d.api_token,
+  };
+}
+
+/**
+ * PATCH body. `zone_id`, `record_id`, `record_name` and `record_type` are sent together when the
+ * record was changed and never otherwise (a zone without its record is a 400). A blank token is
+ * left out so the stored one is kept.
+ */
+export function buildDdnsUpdate(d: DdnsDraft): DdnsConfigUpdate {
+  const body: DdnsConfigUpdate = {
+    name: d.name,
+    proxied: d.proxied,
+    ttl: d.ttl,
+    interval_seconds: d.interval_seconds,
+    enabled: d.enabled,
+  };
+  if (d.target) Object.assign(body, d.target);
+  if (d.api_token) body.api_token = d.api_token;
+  return body;
 }
