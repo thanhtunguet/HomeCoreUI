@@ -13,19 +13,17 @@ describe('legacy endpoint URLs', () => {
     expect(legacyDeviceRef({ id: '', name: 'x' })).toBe('x');
   });
 
-  it('builds the three GET endpoints with the device percent-encoded', () => {
-    const urls = legacyEndpoints({ id: '0193a0b2', name: 'Living room & TV/1' }, 'http://192.168.1.5:8080/');
+  it('builds the three GET endpoint paths (no origin) with the device percent-encoded', () => {
+    const urls = legacyEndpoints({ id: '0193a0b2', name: 'Living room & TV/1' });
     expect(urls.map(u => u.key)).toEqual(['turnOn', 'turnOff', 'isOnline']);
-    expect(urls.map(u => u.url)).toEqual([
-      'http://192.168.1.5:8080/api/turn-on?device=Living%20room%20%26%20TV%2F1',
-      'http://192.168.1.5:8080/api/turn-off?device=Living%20room%20%26%20TV%2F1',
-      'http://192.168.1.5:8080/api/is-online?device=Living%20room%20%26%20TV%2F1'
+    expect(urls.map(u => u.path)).toEqual([
+      '/api/turn-on?device=Living%20room%20%26%20TV%2F1',
+      '/api/turn-off?device=Living%20room%20%26%20TV%2F1',
+      '/api/is-online?device=Living%20room%20%26%20TV%2F1'
     ]);
   });
 
   it('puts the integer id in the URL unencoded', () => {
-    expect(legacyEndpoints({ id: '7', name: 'pc' }, 'https://home.example.com')[0].url).toBe(
-      'https://home.example.com/api/turn-on?device=7'
-    );
+    expect(legacyEndpoints({ id: '7', name: 'pc' })[0].path).toBe('/api/turn-on?device=7');
   });
 });

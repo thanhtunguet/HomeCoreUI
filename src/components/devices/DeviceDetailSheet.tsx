@@ -39,27 +39,51 @@ const agentStatusLabel = (s: Device['shutdown']): string => {
   }
 };
 
+const CopyButton: React.FC<{ label: string; active: boolean; onClick: () => void }> = ({
+  label,
+  active,
+  onClick
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={`Copy ${label}`}
+    className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md transition-colors"
+  >
+    {active ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+    <span>{active ? 'Copied' : 'Copy'}</span>
+  </button>
+);
+
+const CodeLine: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <code className="block font-mono text-[11px] text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700/60 rounded-md px-2 py-1.5 break-all select-all">
+    {children}
+  </code>
+);
+
 /**
- * The three URLs old apps call for this device (ADR-017), each with a copy button. The apps send
+ * The three paths old apps call for this device (ADR-017) plus the Controller origin as its own
+ * field, each with its own copy button (the old app takes the origin and the paths separately). The apps send
  * their own `Authorization: Bearer` header; the Controller operator makes that token with
  * `homecore token create`, so no secret is shown here.
  */
 const LegacyEndpointsSection: React.FC<{ device: Device }> = ({ device }) => {
-  const endpoints = React.useMemo(() => legacyEndpoints(device, window.location.origin), [device]);
+  const endpoints = React.useMemo(() => legacyEndpoints(device), [device]);
+  const origin = window.location.origin;
   const [copied, setCopied] = React.useState<string | null>(null);
   const [failed, setFailed] = React.useState(false);
   const timer = React.useRef<number | undefined>(undefined);
 
   React.useEffect(() => () => window.clearTimeout(timer.current), []);
 
-  const copy = async (key: string, url: string) => {
+  const copy = async (key: string, text: string) => {
     window.clearTimeout(timer.current);
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       setCopied(key);
       setFailed(false);
     } catch {
-      // Clipboard API unavailable (plain HTTP on a LAN address): the URL is selectable text.
+      // Clipboard API unavailable (plain HTTP on a LAN address): the text is selectable.
       setCopied(null);
       setFailed(true);
     }
@@ -77,27 +101,24 @@ const LegacyEndpointsSection: React.FC<{ device: Device }> = ({ device }) => {
       </h3>
 
       <div className="bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3.5 space-y-3 text-xs">
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-neutral-800 dark:text-neutral-200">
+              Origin <span className="font-normal text-neutral-400">· Controller base URL</span>
+            </span>
+            <CopyButton label="Origin" active={copied === 'origin'} onClick={() => copy('origin', origin)} />
+          </div>
+          <CodeLine>{origin}</CodeLine>
+        </div>
         {endpoints.map(ep => (
           <div key={ep.key} className="space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-neutral-800 dark:text-neutral-200">
                 {ep.label} <span className="font-normal text-neutral-400">· GET · {ep.hint}</span>
               </span>
-              <button
-                type="button"
-                onClick={() => copy(ep.key, ep.url)}
-                aria-label={`Copy ${ep.label} URL`}
-                className="shrink-0 flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md transition-colors"
-              >
-                {copied === ep.key ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-                <span>{copied === ep.key ? 'Copied' : 'Copy'}</span>
-              </button>
+              <CopyButton label={`${ep.label} path`} active={copied === ep.key} onClick={() => copy(ep.key, ep.path)} />
             </div>
-            <code
-              className="block font-mono text-[11px] text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700/60 rounded-md px-2 py-1.5 break-all select-all"
-            >
-              {ep.url}
-            </code>
+            <CodeLine>{ep.path}</CodeLine>
           </div>
         ))}
         <div className="pt-1.5 border-t border-neutral-200 dark:border-neutral-700/60 text-[11px] text-neutral-500 dark:text-neutral-400 flex items-start gap-1.5">
@@ -107,7 +128,7 @@ const LegacyEndpointsSection: React.FC<{ device: Device }> = ({ device }) => {
               ? 'Could not copy automatically: select the URL and copy it. '
               : 'Old apps must send an Authorization: Bearer header. Create a long-lived token on the Controller with '}
             {!failed && <span className="font-mono">homecore token create --user NAME</span>}
-            {!failed && '. The device is matched by name, case-insensitive.'}
+            {!failed && '. The device is matched by name, case-insensitive. Paths have no origin: copy it from the Origin field.'}
           </span>
         </div>
       </div>

@@ -9,7 +9,8 @@ export interface LegacyEndpoint {
   label: string;
   /** What the old app receives. */
   hint: string;
-  url: string;
+  /** Path and query only (`/api/turn-on?device=…`); the origin is shown and copied separately. */
+  path: string;
 }
 
 /**
@@ -20,16 +21,12 @@ export interface LegacyEndpoint {
 export const legacyDeviceRef = (device: Pick<Device, 'id' | 'name'>): string =>
   /^\d+$/.test(device.id) ? device.id : device.name;
 
-/** The three endpoints of one device. `origin` is the Controller's base URL without a trailing slash. */
-export const legacyEndpoints = (
-  device: Pick<Device, 'id' | 'name'>,
-  origin: string
-): LegacyEndpoint[] => {
-  const base = origin.replace(/\/+$/, '');
+/** The three endpoints of one device, as paths only: the old app is given the origin separately. */
+export const legacyEndpoints = (device: Pick<Device, 'id' | 'name'>): LegacyEndpoint[] => {
   const q = `?device=${encodeURIComponent(legacyDeviceRef(device))}`;
   return [
-    { key: 'turnOn', label: 'Turn on', hint: 'Wake-on-LAN; answers true', url: `${base}/api/turn-on${q}` },
-    { key: 'turnOff', label: 'Turn off', hint: 'Signed shutdown; answers true', url: `${base}/api/turn-off${q}` },
-    { key: 'isOnline', label: 'Is online', hint: 'Answers true or false', url: `${base}/api/is-online${q}` }
+    { key: 'turnOn', label: 'Turn on', hint: 'Wake-on-LAN; answers true', path: `/api/turn-on${q}` },
+    { key: 'turnOff', label: 'Turn off', hint: 'Signed shutdown; answers true', path: `/api/turn-off${q}` },
+    { key: 'isOnline', label: 'Is online', hint: 'Answers true or false', path: `/api/is-online${q}` }
   ];
 };
