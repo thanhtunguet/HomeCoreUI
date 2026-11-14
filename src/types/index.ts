@@ -96,12 +96,20 @@ export interface DDNSConfig {
   status: DDNSState;
 }
 
-export type ActivityCategory = 'device' | 'wol' | 'shutdown' | 'ddns' | 'auth' | 'system';
+/** `wol` and `shutdown` are the server's `command` category split by action. */
+export type ActivityCategory = 'device' | 'wol' | 'shutdown' | 'ddns' | 'auth' | 'user' | 'system';
 export type ActivityOutcome = 'success' | 'warning' | 'error' | 'info';
 
 export interface ActivityEvent {
+  /** Stable: `act-<id>` (Controller feed), `cmd-<uuid>` (command history only), `local-...` (this tab). */
   id: string;
+  /** Where the line comes from; only `local` ones can be cleared by the user. */
+  source: 'server' | 'command' | 'local';
   timestamp: string;
+  /** Who did it (username, `cli`, `system`); absent when unknown. */
+  actor?: string;
+  /** Set on wake/shutdown requests; the line then carries the command's outcome. */
+  commandId?: string;
   category: ActivityCategory;
   deviceId?: string;
   deviceName?: string;

@@ -177,6 +177,8 @@ export function commandToActivity(c: ApiCommand, deviceName?: string): ActivityE
   const action = c.type === 'wake' ? 'wake' : 'shutdown';
   return {
     id: `cmd-${c.id}`,
+    source: 'command',
+    commandId: c.id,
     timestamp: c.completed_at ?? c.updated_at ?? c.created_at,
     category: c.type === 'wake' ? 'wol' : 'shutdown',
     deviceId: c.device_id,

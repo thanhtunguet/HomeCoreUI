@@ -62,6 +62,7 @@ const calls: Record<string, () => Promise<unknown>> = {
   probeDevice: () => endpoints.probeDevice(ID),
   getDeviceHistory: () => endpoints.getDeviceHistory(ID),
   listCommands: () => endpoints.listCommands(),
+  listActivity: () => endpoints.listActivity({ category: 'device', deviceId: ID }),
   getCommand: () => endpoints.getCommand(ID),
   getSystemMetrics: () => endpoints.getSystemMetrics(),
   getSystemInfo: () => endpoints.getSystemInfo(),
@@ -140,6 +141,13 @@ describe('spec facts the UI relies on', () => {
     expect(spec.components.schemas.DdnsConfigCreate.required).toEqual(expect.arrayContaining(['zone_id', 'record_id', 'record_name', 'record_type']));
     expect(spec.components.schemas.DdnsConfig.required).toContain('record_id');
     expect(spec.components.schemas.DdnsConfigUpdate.properties.record_id).toBeDefined();
+  });
+
+  it('listActivity filters are the ones the UI sends: device_id and category', () => {
+    const params = spec.paths['/api/v1/activity'].get.parameters.map((x: { $ref?: string; name?: string }) => x.name ?? x.$ref);
+    expect(params).toEqual(expect.arrayContaining(['device_id', 'category']));
+    expect(spec.components.schemas.ActivityCategory.enum).toEqual(['auth', 'device', 'command', 'ddns', 'user', 'system']);
+    expect(spec.components.schemas.ActivityItem.required).toEqual(['id', 'at', 'category', 'action', 'result', 'message']);
   });
 
   it('Cloudflare lookups take api_token or config_id', () => {

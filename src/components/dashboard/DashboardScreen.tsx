@@ -355,8 +355,8 @@ export const DashboardScreen: React.FC = () => {
           </div>
 
           <div className="pt-3 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
-            <span>Controller command history + this session</span>
-            <span className="font-mono">{activities.length} total events</span>
+            <span>Controller activity log + command outcomes</span>
+            <span className="font-mono">{activities.length} events</span>
           </div>
         </section>
       </div>

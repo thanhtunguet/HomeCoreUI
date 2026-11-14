@@ -11,6 +11,7 @@ import {
 import * as api from '../api/endpoints';
 import { ApiError } from '../api/client';
 import type {
+  ActivityItem,
   ApiCommand,
   ApiDdnsConfig,
   ApiDevice,
@@ -18,6 +19,7 @@ import type {
   ControllerKey,
   Health
 } from '../api/schema';
+import { mergeActivity } from '../api/activity';
 import { buildDdnsCreate, buildDdnsUpdate, commandToActivity, type DdnsDraft, needsAgentRemoval, toDDNSConfig, toDevice, toDeviceCreate, toDeviceUpdate, toSystemMetrics } from '../api/mappers';
 import { migrateLegacyDeviceMeta } from '../api/deviceMeta';
 import { clockTime } from '../api/format';
@@ -97,10 +99,13 @@ interface AppContextType {
   saveDdns: (id: string | null, draft: DDNSDraft) => Promise<string | null>;
   deleteDdns: (id: string) => Promise<string | null>;
 
-  // Activity: Controller commands + events raised in this browser session
+  // Activity: the Controller's activity feed + command outcomes + browser-local events
   activities: ActivityEvent[];
-  addActivity: (event: Omit<ActivityEvent, 'id' | 'timestamp'>) => void;
-  /** Clears only the session events; commands stay in the Controller's history. */
+  /** The Controller's feed was cut at its page cap: older entries exist but are not loaded. */
+  activityTruncated: boolean;
+  /** Adds a browser-local event (things the Controller cannot know, e.g. a probe). */
+  addActivity: (event: Omit<ActivityEvent, 'id' | 'timestamp' | 'source'>) => void;
+  /** Clears only the browser-local events; the Controller's log cannot be cleared. */
   clearActivities: () => void;
 
   // System
@@ -187,6 +192,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [devicesLoaded, setDevicesLoaded] = useState(false);
   const [latencies, setLatencies] = useState<Record<string, number>>({});
   const [commands, setCommands] = useState<ApiCommand[]>([]);
+  const [apiActivity, setApiActivity] = useState<ActivityItem[]>([]);
+  const [activityTruncated, setActivityTruncated] = useState(false);
   const [localEvents, setLocalEvents] = useState<ActivityEvent[]>([]);
   const [apiMetrics, setApiMetrics] = useState<ApiSystemMetrics | null>(null);
   const [serverHealth, setServerHealth] = useState<Health | null>(null);
@@ -260,6 +267,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [setIssue]);
 
+  const refreshActivity = useCallback(async () => {
+    try {
+      const { items, more } = await api.listActivity();
+      setApiActivity(items);
+      setActivityTruncated(more);
+      setIssue('activity', null);
+    } catch (e) {
+      setIssue('activity', e); // keep the last feed
+      throw e;
+    }
+  }, [setIssue]);
+
+  /** Pull the feed (and commands) right after one of the user's own mutating actions. */
+  const refreshAfterAction = useCallback(() => {
+    void refreshActivity().catch(() => undefined);
+    void refreshCommands().catch(() => undefined);
+  }, [refreshActivity, refreshCommands]);
+
   const refreshSystemMetrics = useCallback(async () => {
     try {
       setApiMetrics(await api.getSystemMetrics());
@@ -286,6 +311,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   usePolling(refreshDevices, 10_000);
   usePolling(refreshCommands, 15_000);
+  usePolling(refreshActivity, 15_000);
   usePolling(refreshSystemMetrics, 10_000);
   usePolling(refreshDdns, 30_000);
   usePolling(refreshHealth, 60_000);
@@ -300,21 +326,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // ---- Activity --------------------------------------------------------------------------
-  const addActivity = useCallback((event: Omit<ActivityEvent, 'id' | 'timestamp'>) => {
+  const addActivity = useCallback((event: Omit<ActivityEvent, 'id' | 'timestamp' | 'source'>) => {
     const e: ActivityEvent = {
       ...event,
       id: `local-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      source: 'local',
       timestamp: new Date().toISOString()
     };
     setLocalEvents(prev => [e, ...prev.slice(0, 99)]);
   }, []);
 
-  const activities = useMemo(() => {
-    const names = new Map(devices.map(d => [d.id, d.name]));
-    return [...commands.map(c => commandToActivity(c, names.get(c.device_id))), ...localEvents].sort(
-      (a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)
-    );
-  }, [commands, localEvents, devices]);
+  const activities = useMemo(
+    () =>
+      mergeActivity({
+        server: apiActivity,
+        serverTruncated: activityTruncated,
+        commands,
+        local: localEvents,
+        deviceNames: new Map(devices.map(d => [d.id, d.name]))
+      }),
+    [apiActivity, activityTruncated, commands, localEvents, devices]
+  );
 
   const clearActivities = () => setLocalEvents([]);
 
@@ -337,16 +369,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       }
       setApiDevices(prev => (prev.some(d => d.id === saved.id) ? prev.map(d => (d.id === saved.id ? saved : d)) : [...prev, saved]));
-      addActivity({
-        category: 'device',
-        deviceId: saved.id,
-        deviceName: saved.name,
-        title: editingDevice ? 'Device Configuration Updated' : 'New Device Registered',
-        description: editingDevice
-          ? `Settings updated for ${saved.name} (${saved.ip_address})`
-          : `Added ${saved.name} with target ${saved.ip_address}:${saved.monitor_port}.`,
-        outcome: editingDevice ? 'info' : 'success'
-      });
+      refreshAfterAction(); // the Controller's feed records the change
       if (unbindError) return `Saved, but the agent binding could not be removed: ${unbindError}`;
       setDeviceModalOpen(false);
       setEditingDevice(null);
@@ -367,12 +390,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     setApiDevices(prev => prev.filter(d => d.id !== id));
     if (selectedId === id) setSelectedId(null);
-    addActivity({
-      category: 'device',
-      title: 'Device Removed',
-      description: `Removed ${target.name} (${target.ip}) from registered inventory.`,
-      outcome: 'warning'
-    });
+    refreshAfterAction();
   };
 
   const probeDevice = async (id: string): Promise<boolean> => {
@@ -449,6 +467,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const first = await api.wakeDevice(device.id);
       log(`POST /devices/${device.id}/wake -> 202, command ${first.id}`);
+      refreshAfterAction();
       // Idempotent API: an already-active wake is returned as is, and waking an online device
       // answers with a command that is already `completed`. Neither is an error.
       const immediate = isTerminal(first);
@@ -539,6 +558,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const first = await api.shutdownDevice(target.id);
       log(`POST /devices/${target.id}/shutdown -> 202, command ${first.id}`);
+      refreshAfterAction();
       // Idempotent API: an already-active shutdown is returned as is, and shutting down an offline
       // device answers with a command that is already `completed`. Neither is an error.
       const immediate = isTerminal(first);
@@ -620,16 +640,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setBusy(target, true);
     try {
       const r = await api.syncDdnsConfig(target);
-      addActivity({
-        category: 'ddns',
-        title: r.result === 'failed' ? 'Cloudflare DDNS Sync Failed' : r.result === 'updated' ? 'Cloudflare DNS Record Updated' : 'DDNS Already Up To Date',
-        description:
-          r.result === 'failed'
-            ? `${cfg?.record_name ?? 'Record'}: ${r.error ?? 'unknown error'}`
-            : `${cfg?.record_name ?? 'Record'} ${r.result === 'updated' ? 'now points to' : 'already points to'} ${r.ip ?? 'the detected WAN IP'}.`,
-        outcome: r.result === 'failed' ? 'error' : r.result === 'updated' ? 'success' : 'info',
-        details: { endpoint: `/api/v1/ddns/${target}/sync`, method: 'POST', responseCode: 200, rawOutput: JSON.stringify(r, null, 2) }
-      });
+      refreshAfterAction();
       if (r.result === 'failed') pushToast('error', `DDNS sync failed: ${r.error ?? 'unknown error'}`);
       await refreshDdns().catch(() => undefined);
     } catch (e) {
@@ -646,12 +657,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         : await api.createDdnsConfig(buildDdnsCreate(draft));
       setApiDdns(prev => (prev.some(c => c.id === saved.id) ? prev.map(c => (c.id === saved.id ? saved : c)) : [...prev, saved]));
       setActiveDdnsId(saved.id);
-      addActivity({
-        category: 'ddns',
-        title: id ? 'Cloudflare DDNS Settings Updated' : 'Cloudflare DDNS Record Added',
-        description: `${saved.record_name} (${saved.record_type}), every ${Math.round(saved.interval_seconds / 60)} min.`,
-        outcome: 'info'
-      });
+      refreshAfterAction();
       return null;
     } catch (e) {
       return errMsg(e);
@@ -663,7 +669,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await api.deleteDdnsConfig(id);
       setApiDdns(prev => prev.filter(c => c.id !== id));
       setActiveDdnsId(prev => (prev === id ? null : prev));
-      addActivity({ category: 'ddns', title: 'Cloudflare DDNS Record Removed', description: 'The record is no longer kept up to date.', outcome: 'warning' });
+      refreshAfterAction();
       return null;
     } catch (e) {
       return errMsg(e);
@@ -676,7 +682,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const systemMetrics = useMemo(() => (apiMetrics ? toSystemMetrics(apiMetrics) : null), [apiMetrics]);
 
   const connectionIssue = useMemo(() => {
-    for (const k of ['devices', 'commands', 'metrics']) if (issues[k]) return issues[k];
+    for (const k of ['devices', 'commands', 'activity', 'metrics']) if (issues[k]) return issues[k];
     return null;
   }, [issues]);
 
@@ -727,6 +733,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         saveDdns,
         deleteDdns,
         activities,
+        activityTruncated,
         addActivity,
         clearActivities,
         systemMetrics,

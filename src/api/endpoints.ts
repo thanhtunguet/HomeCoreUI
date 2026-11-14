@@ -6,6 +6,8 @@
 import { request } from './client';
 import type {
   AgentBinding,
+  ActivityCategory,
+  ActivityItem,
   ApiCommand,
   ApiDdnsConfig,
   ApiDevice,
@@ -34,8 +36,15 @@ export type { AgentBinding };
 const PAGE_LIMIT = 200; // spec maximum
 const MAX_PAGES = 50; // safety net against a cursor loop
 
-/** Follow `next_cursor` until exhausted (or `max` items collected). */
-async function collect<T>(path: string, query: Record<string, string | number | undefined> = {}, max = Infinity): Promise<T[]> {
+/**
+ * Follow `next_cursor` until exhausted (or `max` items collected). `more` tells that the server
+ * still had entries beyond what was returned (stopped at `max` or at the page cap).
+ */
+async function collectPage<T>(
+  path: string,
+  query: Record<string, string | number | undefined> = {},
+  max = Infinity,
+): Promise<{ items: T[]; more: boolean }> {
   const all: T[] = [];
   let cursor: string | undefined;
   for (let i = 0; i < MAX_PAGES; i++) {
@@ -44,8 +53,11 @@ async function collect<T>(path: string, query: Record<string, string | number | 
     cursor = page.next_cursor;
     if (!cursor || all.length >= max) break;
   }
-  return all.slice(0, max);
+  return { items: all.slice(0, max), more: Boolean(cursor) || all.length > max };
 }
+
+const collect = async <T>(path: string, query: Record<string, string | number | undefined> = {}, max = Infinity): Promise<T[]> =>
+  (await collectPage<T>(path, query, max)).items;
 
 // health (public)
 export const getHealthz = () => request<Health>('/healthz', { anonymous: true });
@@ -73,6 +85,12 @@ export const getDeviceHistory = (id: string, max = 50) => collect<StatusChange>(
 // commands
 export const listCommands = (opts: { deviceId?: string; status?: CommandStatus; max?: number } = {}) =>
   collect<ApiCommand>('/api/v1/commands', { device_id: opts.deviceId, status: opts.status }, opts.max ?? 100);
+/**
+ * Activity feed (audit log), newest first. `more` is true when older entries exist beyond `max`
+ * (the UI then knows its window is truncated). Filters are the spec's `category` and `device_id`.
+ */
+export const listActivity = (opts: { category?: ActivityCategory; deviceId?: string; max?: number } = {}) =>
+  collectPage<ActivityItem>('/api/v1/activity', { category: opts.category, device_id: opts.deviceId }, opts.max ?? 200);
 export const getCommand = (id: string) => request<ApiCommand>(`/api/v1/commands/${id}`);
 
 // system

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ActivityCategory, ActivityOutcome, ActivityEvent } from '../../types';
+import { filterActivity } from '../../api/activity';
 import { CustomSelect } from '../common/CustomSelect';
 import {
   Activity,
@@ -15,6 +16,7 @@ import {
   Globe,
   Server,
   ShieldCheck,
+  UserRound,
   ChevronDown,
   ChevronRight,
   Terminal,
@@ -25,7 +27,8 @@ import {
 } from 'lucide-react';
 
 export const ActivityScreen: React.FC = () => {
-  const { activities, clearActivities, devices } = useApp();
+  const { activities, activityTruncated, clearActivities, devices } = useApp();
+  const localCount = activities.filter(a => a.source === 'local').length;
 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
@@ -34,16 +37,11 @@ export const ActivityScreen: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const filteredEvents = activities.filter(event => {
-    const matchesCategory = categoryFilter === 'all' || event.category === categoryFilter;
-    const matchesOutcome = outcomeFilter === 'all' || event.outcome === outcomeFilter;
-    const matchesDevice = deviceFilter === 'all' || event.deviceId === deviceFilter;
-    const matchesSearch =
-      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (event.deviceName && event.deviceName.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    return matchesCategory && matchesOutcome && matchesDevice && matchesSearch;
+  const filteredEvents = filterActivity(activities, {
+    category: categoryFilter,
+    outcome: outcomeFilter,
+    deviceId: deviceFilter,
+    query: searchQuery
   });
 
   const getCategoryIcon = (category: ActivityCategory) => {
@@ -58,6 +56,8 @@ export const ActivityScreen: React.FC = () => {
         return <Server size={14} className="text-emerald-500" />;
       case 'auth':
         return <ShieldCheck size={14} className="text-purple-500" />;
+      case 'user':
+        return <UserRound size={14} className="text-indigo-500" />;
       case 'system':
       default:
         return <Activity size={14} className="text-neutral-400" />;
@@ -125,11 +125,17 @@ export const ActivityScreen: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
-            Unified Activity & Command Timeline
+            Activity & Command Timeline
           </h1>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Wake-on-LAN and shutdown commands from the Controller's history, plus probe, device and DDNS actions taken in this browser session.
+            Who did what, from the Controller's persistent activity log (sign-ins, device and DDNS changes, wake and shutdown
+            requests). Wake and shutdown lines show the command's outcome. Probe results are browser-local and disappear on reload.
           </p>
+          {activityTruncated && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+              Showing the most recent entries only; older ones exist on the Controller.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -143,11 +149,12 @@ export const ActivityScreen: React.FC = () => {
 
           <button
             onClick={clearActivities}
-            title="Removes events raised in this browser session. Controller command history is kept."
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-red-600 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
+            disabled={localCount === 0}
+            title="Removes the browser-local events (probe results) only. The Controller's activity log cannot be cleared."
+            className="disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-red-600 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
           >
             <Trash2 size={14} />
-            <span>Clear Session Events</span>
+            <span>Clear local events{localCount > 0 ? ` (${localCount})` : ''}</span>
           </button>
         </div>
       </div>
@@ -172,11 +179,12 @@ export const ActivityScreen: React.FC = () => {
           onChange={setCategoryFilter}
           options={[
             { value: 'all', label: 'All Categories' },
-            { value: 'device', label: 'Device Monitoring' },
+            { value: 'device', label: 'Devices' },
             { value: 'wol', label: 'Wake-on-LAN' },
             { value: 'shutdown', label: 'Shutdown Signals' },
             { value: 'ddns', label: 'Cloudflare DDNS' },
-            { value: 'system', label: 'System / Host' },
+            { value: 'user', label: 'Accounts' },
+            { value: 'system', label: 'System' },
             { value: 'auth', label: 'Authentication' }
           ]}
         />
@@ -237,6 +245,12 @@ export const ActivityScreen: React.FC = () => {
                           · {event.deviceName}
                         </span>
                       )}
+                      {event.actor && (
+                        <span className="text-[11px] text-neutral-400">by {event.actor}</span>
+                      )}
+                      {event.source === 'local' && (
+                        <span className="text-[10px] px-1.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500">this browser</span>
+                      )}
                     </div>
 
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
@@ -261,10 +275,12 @@ export const ActivityScreen: React.FC = () => {
                   <div className="flex items-center justify-between text-[11px] text-neutral-400 pb-1">
                     <div className="flex items-center gap-2">
                       <Terminal size={13} className="text-neutral-400" />
-                      <span className="font-semibold text-neutral-500 uppercase tracking-wider">REST Trace & Payload</span>
+                      <span className="font-semibold text-neutral-500 uppercase tracking-wider">
+                        {event.details?.endpoint ? 'REST Trace & Payload' : 'Details'}
+                      </span>
                     </div>
 
-                    <button
+                    {event.details?.endpoint && <button
                       onClick={() => handleCopyCurl(event)}
                       className="flex items-center gap-1 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors"
                     >
@@ -279,20 +295,20 @@ export const ActivityScreen: React.FC = () => {
                           <span>Copy as cURL</span>
                         </>
                       )}
-                    </button>
+                    </button>}
                   </div>
 
                   <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-3 font-mono text-[11px] text-neutral-300 space-y-2 overflow-x-auto">
-                    <div className="flex items-center gap-2 text-neutral-400">
+                    {(event.details?.endpoint || event.details?.responseCode) && <div className="flex items-center gap-2 text-neutral-400">
                       <span className="text-emerald-400 font-semibold">{event.details?.method || 'POST'}</span>
-                      <span>{event.details?.endpoint || '/api/v1/event'}</span>
+                      <span>{event.details?.endpoint}</span>
                       {event.details?.responseCode && (
                         <span className="text-neutral-500">HTTP {event.details.responseCode}</span>
                       )}
                       {event.details?.latencyMs && (
                         <span className="text-neutral-500">({event.details.latencyMs} ms)</span>
                       )}
-                    </div>
+                    </div>}
 
                     {event.details?.requestPayload && (
                       <div className="pt-1 text-neutral-400">
@@ -303,8 +319,8 @@ export const ActivityScreen: React.FC = () => {
 
                     {event.details?.rawOutput && (
                       <div className="pt-1 text-neutral-400">
-                        <span className="text-neutral-500 block mb-0.5">// Server Diagnostic Log</span>
-                        <div className="text-emerald-300/90">{event.details.rawOutput}</div>
+                        <span className="text-neutral-500 block mb-0.5">// Diagnostic Log</span>
+                        <div className="text-emerald-300/90 whitespace-pre-wrap">{event.details.rawOutput}</div>
                       </div>
                     )}
                   </div>

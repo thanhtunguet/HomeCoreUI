@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { json, mockFetch, mockFetchAll, putSession, stubLocalStorage } from '../test/helpers';
-import { createDevice, getDeviceHistory, listCloudflareRecords, listCloudflareZones, listCommands, listDevices, removeDeviceAgent } from './endpoints';
+import { createDevice, listActivity, getDeviceHistory, listCloudflareRecords, listCloudflareZones, listCommands, listDevices, removeDeviceAgent } from './endpoints';
 
 const dev = (id: string, name: string) => ({ id, name });
 
@@ -56,6 +56,47 @@ describe('cursor pagination', () => {
   it('history respects its own max', async () => {
     mockFetch(json({ items: [{ status: 'online', changed_at: 't1' }, { status: 'offline', changed_at: 't2' }], next_cursor: 'c' }));
     expect(await getDeviceHistory('d1', 1)).toHaveLength(1);
+  });
+});
+
+describe('listActivity', () => {
+  const item = (id: number) => ({ id, at: '2026-11-14T10:00:00Z', category: 'device', action: 'device.update', result: 'ok', message: 'm' });
+
+  it('sends the category and device_id filters and the page limit', async () => {
+    const { calls } = mockFetch(json({ items: [item(2), item(1)] }));
+    const r = await listActivity({ category: 'device', deviceId: 'dev-1' });
+    expect(calls[0].path).toBe('/api/v1/activity');
+    expect(calls[0].query.get('category')).toBe('device');
+    expect(calls[0].query.get('device_id')).toBe('dev-1');
+    expect(calls[0].query.get('limit')).toBe('200');
+    expect(r.items.map(i => i.id)).toEqual([2, 1]); // server order kept
+    expect(r.more).toBe(false);
+  });
+
+  it('omits absent filters', async () => {
+    const { calls } = mockFetch(json({ items: [] }));
+    await listActivity();
+    expect(calls[0].query.has('category')).toBe(false);
+    expect(calls[0].query.has('device_id')).toBe(false);
+  });
+
+  it('follows next_cursor up to max, trims, and reports that older entries remain', async () => {
+    const { calls } = mockFetch(
+      json({ items: [item(5), item(4)], next_cursor: 'c1' }),
+      json({ items: [item(3), item(2)], next_cursor: 'c2' }),
+    );
+    const r = await listActivity({ max: 3 });
+    expect(r.items.map(i => i.id)).toEqual([5, 4, 3]);
+    expect(r.more).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].query.get('cursor')).toBe('c1');
+  });
+
+  it('reads every page when the feed is shorter than max (more = false)', async () => {
+    mockFetch(json({ items: [item(3)], next_cursor: 'c1' }), json({ items: [item(2), item(1)] }));
+    const r = await listActivity({ max: 50 });
+    expect(r.items).toHaveLength(3);
+    expect(r.more).toBe(false);
   });
 });
 

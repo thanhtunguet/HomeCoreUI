@@ -52,6 +52,9 @@ export type CommandStatus = Schemas['CommandStatus'];
 export type Command = Res<'Command'>;
 export type ApiCommand = Command;
 
+export type ActivityCategory = Schemas['ActivityCategory'];
+export type ActivityItem = Res<'ActivityItem'>;
+
 export type SystemMetrics = Res<'SystemMetrics'>;
 export type ApiSystemMetrics = SystemMetrics;
 export type SystemInfo = Res<'SystemInfo'>;
