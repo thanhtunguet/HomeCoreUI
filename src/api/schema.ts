@@ -22,6 +22,12 @@ export type User = Res<'User'>;
 export type LoginRequest = Req<'LoginRequest'>;
 export type TokenPair = Res<'TokenPair'>;
 
+/** Service account keys (ADR-018). `ServiceAccountKeyCreated` carries the secret `key`, once. */
+export type ServiceKeyScope = Schemas['ServiceAccountKeyScope'];
+export type ServiceKey = Res<'ServiceAccountKey'>;
+export type ServiceKeyCreated = Res<'ServiceAccountKeyCreated'>;
+export type ServiceKeyCreate = Req<'CreateServiceAccountKeyRequest'>;
+
 export type ApiDeviceStatus = Schemas['DeviceStatus'];
 export type PowerTransition = Schemas['PowerTransition'];
 export type DeviceType = Schemas['DeviceType'];

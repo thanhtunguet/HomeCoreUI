@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { json, mockFetch, mockFetchAll, putSession, stubLocalStorage } from '../test/helpers';
-import { createDevice, listActivity, getDeviceHistory, listCloudflareRecords, listCloudflareZones, listCommands, listDevices, removeDeviceAgent } from './endpoints';
+import { apiError, json, mockFetch, mockFetchAll, putSession, stubLocalStorage } from '../test/helpers';
+import { createDevice, createServiceAccountKey, listServiceAccountKeys, revokeServiceAccountKey, listActivity, getDeviceHistory, listCloudflareRecords, listCloudflareZones, listCommands, listDevices, removeDeviceAgent } from './endpoints';
 
 const dev = (id: string, name: string) => ({ id, name });
 
@@ -127,5 +127,39 @@ describe('request shapes', () => {
     expect(calls[0]).toMatchObject({ method: 'POST', path: '/api/v1/ddns/cloudflare/zones', body: { api_token: 'secret-token' } });
     expect(calls[1]).toMatchObject({ method: 'POST', path: '/api/v1/ddns/cloudflare/zones/zone%2F1/records', body: { config_id: 'cfg-1' } });
     expect(calls.every(c => !c.url.includes('secret-token'))).toBe(true);
+  });
+});
+
+describe('service account keys', () => {
+  const meta = { id: 'k1', name: 'claude mcp', scope: 'mcp', status: 'active', ttl_seconds: 31_536_000, created_at: '2026-11-14T00:00:00Z', expires_at: '2027-11-14T00:00:00Z' };
+
+  it('lists keys without paging: the list is `{items}` and holds no secret', async () => {
+    const { calls } = mockFetchAll(() => json({ items: [meta] }));
+    expect(await listServiceAccountKeys()).toEqual([meta]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].query.has('cursor')).toBe(false);
+  });
+
+  it('creates with exactly the body it is given, and returns the one-time key', async () => {
+    const { calls } = mockFetchAll(() => json({ ...meta, key: 'eyJ.secret.sig' }, { status: 201 }));
+    const made = await createServiceAccountKey({ name: 'claude mcp', scope: 'mcp', ttl_seconds: 86_400 });
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].path).toBe('/api/v1/service-account-keys');
+    expect(calls[0].body).toEqual({ name: 'claude mcp', scope: 'mcp', ttl_seconds: 86_400 });
+    expect(made.key).toBe('eyJ.secret.sig');
+  });
+
+  it('revokes with DELETE and treats 204 as success', async () => {
+    const { calls } = mockFetchAll(() => new Response(null, { status: 204 }));
+    await expect(revokeServiceAccountKey('k1')).resolves.toBeUndefined();
+    expect(calls[0].method).toBe('DELETE');
+    expect(calls[0].path).toBe('/api/v1/service-account-keys/k1');
+  });
+
+  it('surfaces the Controller error envelope (e.g. 400 for a bad ttl, 404 for a foreign key)', async () => {
+    mockFetchAll(() => apiError(400, 'bad_request', 'ttl_seconds must be between 60 and 630720000'));
+    await expect(createServiceAccountKey({ name: 'x', scope: 'mcp', ttl_seconds: 5 })).rejects.toMatchObject({ status: 400, code: 'bad_request' });
+    mockFetchAll(() => apiError(404, 'not_found', 'service account key not found'));
+    await expect(revokeServiceAccountKey('nope')).rejects.toMatchObject({ status: 404 });
   });
 });

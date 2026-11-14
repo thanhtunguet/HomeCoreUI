@@ -52,6 +52,9 @@ const calls: Record<string, () => Promise<unknown>> = {
   login: () => endpoints.login('u', 'p'),
   logout: () => endpoints.logout('refresh'),
   getCurrentUser: () => endpoints.getCurrentUser(),
+  listServiceAccountKeys: () => endpoints.listServiceAccountKeys(),
+  createServiceAccountKey: () => endpoints.createServiceAccountKey({ name: 'n', scope: 'mcp', ttl_seconds: 3600 }),
+  revokeServiceAccountKey: () => endpoints.revokeServiceAccountKey(ID),
   listDevices: () => endpoints.listDevices(),
   createDevice: () => endpoints.createDevice({ name: 'n', ip_address: '10.0.0.2', monitor_port: 22 }),
   updateDevice: () => endpoints.updateDevice(ID, { name: 'n' }),
@@ -148,6 +151,17 @@ describe('spec facts the UI relies on', () => {
     expect(params).toEqual(expect.arrayContaining(['device_id', 'category']));
     expect(spec.components.schemas.ActivityCategory.enum).toEqual(['auth', 'device', 'command', 'ddns', 'user', 'system']);
     expect(spec.components.schemas.ActivityItem.required).toEqual(['id', 'at', 'category', 'action', 'result', 'message']);
+  });
+
+  it('service account keys: scopes, ttl bounds and the secret only on the created type', () => {
+    const sc = spec.components.schemas;
+    expect(sc.ServiceAccountKeyScope.enum).toEqual(['legacy', 'mcp']);
+    expect(sc.ServiceAccountKey.properties.key).toBeUndefined();
+    expect(sc.ServiceAccountKeyCreated.allOf[1].required).toEqual(['key']);
+    expect(sc.CreateServiceAccountKeyRequest.required).toEqual(['name', 'scope']);
+    const ttl = sc.CreateServiceAccountKeyRequest.properties.ttl_seconds;
+    expect([ttl.minimum, ttl.maximum, ttl.default]).toEqual([60, 630720000, 31536000]);
+    expect(sc.ServiceAccountKey.properties.status.enum).toEqual(['active', 'rotated', 'expired', 'revoked']);
   });
 
   it('Cloudflare lookups take api_token or config_id', () => {

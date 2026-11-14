@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getSystemInfo } from '../../api/endpoints';
 import type { SystemInfo } from '../../api/schema';
+import { ServiceKeysSection } from './ServiceKeysSection';
 import {
   Shield,
   Server,
@@ -96,7 +97,7 @@ export const SettingsScreen: React.FC = () => {
       <div>
         <h1 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">Settings & Security</h1>
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          Your account, the Controller you are connected to, agent trust, and browser preferences.
+          Your account, the Controller you are connected to, agent trust, service account keys, and browser preferences.
         </p>
       </div>
 
@@ -199,6 +200,9 @@ export const SettingsScreen: React.FC = () => {
           <p className="text-[11px] text-neutral-400">{controllerKeyError ?? 'Loading…'}</p>
         )}
       </section>
+
+      {/* Service account keys (AI agents, legacy apps) */}
+      <ServiceKeysSection />
 
       {/* Browser preferences */}
       <form onSubmit={handleSave} className={cardCls}>

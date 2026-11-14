@@ -26,6 +26,9 @@ import type {
   SystemInfo,
   Page,
   ProbeResult,
+  ServiceKey,
+  ServiceKeyCreate,
+  ServiceKeyCreated,
   StatusChange,
   TokenPair,
   User,
@@ -68,6 +71,14 @@ export const login = (username: string, password: string) =>
 export const logout = (refreshToken: string) =>
   request<void>('/api/v1/auth/logout', { method: 'POST', body: { refresh_token: refreshToken } });
 export const getCurrentUser = () => request<User>('/api/v1/auth/me');
+
+// service account keys (session token required; a key can never manage keys)
+export const listServiceAccountKeys = () => request<{ items: ServiceKey[] }>('/api/v1/service-account-keys').then(r => r.items);
+/** The response holds the secret `key` exactly once: show it, never store it. */
+export const createServiceAccountKey = (body: ServiceKeyCreate) =>
+  request<ServiceKeyCreated>('/api/v1/service-account-keys', { method: 'POST', body });
+/** Idempotent: 204 for a key that is already revoked; 404 for an unknown key or another user's. */
+export const revokeServiceAccountKey = (id: string) => request<void>(`/api/v1/service-account-keys/${id}`, { method: 'DELETE' });
 
 // devices
 export const listDevices = () => collect<ApiDevice>('/api/v1/devices');

@@ -128,6 +128,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/service-key/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the service account key used for this request
+         * @description Authenticate with the service account key to replace (`Authorization: Bearer <key>`). The
+         *     Controller checks that the key is valid (not revoked, not expired), creates a new key of the
+         *     same owner, name and scope with a new key pair, and answers with it. A session token is
+         *     refused (`403`): only a key can rotate itself; users manage keys with the
+         *     `/service-account-keys` operations.
+         *
+         *     The old key is **not** cut off at once: it keeps working for `previous_key_valid_until`
+         *     (a minute) so a client that lost this response can retry. A retry with the old key inside
+         *     that window returns the same new key (`200`, no second key is created); after it the old key
+         *     is `401`. The new key's lifetime is the old key's `ttl_seconds` unless the request sets one.
+         *     Store the new key before using it: it is shown only in this response and at creation.
+         */
+        post: operations["rotateServiceAccountKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service-account-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the caller's service account keys
+         * @description Metadata only, newest first: the key material is never returned again. Keys of other users
+         *     are not listed. Session token required.
+         */
+        get: operations["listServiceAccountKeys"];
+        put?: never;
+        /**
+         * Create a service account key
+         * @description The Controller generates an Ed25519 key pair, keeps the private key sealed in its database
+         *     and returns the key once in `key`. Send it as `Authorization: Bearer <key>`. Actions made
+         *     with it are attributed to the caller. `ttl_seconds` defaults to one year (at most 20 years).
+         *     Session token required.
+         */
+        post: operations["createServiceAccountKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/service-account-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServiceAccountKeyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a service account key
+         * @description Takes effect at once. Idempotent: revoking a revoked key is `204`. A key that does not exist or
+         *     belongs to another user is `404`. Session token required.
+         */
+        delete: operations["revokeServiceAccountKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices": {
         parameters: {
             query?: never;
@@ -626,6 +707,73 @@ export interface components {
             id: string;
             username: string;
         };
+        /**
+         * @description `legacy`: only the three legacy operations (and rotating itself).
+         *     `mcp`: device control and read-only monitoring for AI agents (the operations that list `mcp`
+         *     in `x-token-scopes`), never configuration, DDNS or key management.
+         * @enum {string}
+         */
+        ServiceAccountKeyScope: "legacy" | "mcp";
+        ServiceAccountKey: {
+            /**
+             * Format: uuid
+             * @description Also the `kid` of the key's JWT header.
+             */
+            id: string;
+            name: string;
+            scope: components["schemas"]["ServiceAccountKeyScope"];
+            /**
+             * @description `active`, `rotated` (replaced by a rotation; dead once the grace window is over),
+             *     `expired` or `revoked`.
+             * @enum {string}
+             */
+            status: "active" | "rotated" | "expired" | "revoked";
+            /** @description Lifetime chosen at creation; a rotation reuses it. */
+            ttl_seconds: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /**
+             * Format: date-time
+             * @description Last authenticated request, accurate to about a minute. Absent if never used.
+             */
+            last_used_at?: string;
+            /**
+             * Format: uuid
+             * @description The key that replaced this one. Absent unless rotated.
+             */
+            rotated_to?: string;
+        };
+        /** @description A key together with its secret. The secret is returned only by the operation that made the key. */
+        ServiceAccountKeyCreated: components["schemas"]["ServiceAccountKey"] & {
+            /** @description The credential (a JWT signed by the key's private key). Send it as `Authorization: Bearer <key>`. Treat it as a password. */
+            key: string;
+            /**
+             * Format: uuid
+             * @description Rotation only; the key that was replaced.
+             */
+            previous_key_id?: string;
+            /**
+             * Format: date-time
+             * @description Rotation only; when the replaced key stops working.
+             */
+            previous_key_valid_until?: string;
+        };
+        CreateServiceAccountKeyRequest: {
+            /** @description What the key is for (for example `claude mcp`). */
+            name: string;
+            scope: components["schemas"]["ServiceAccountKeyScope"];
+            /**
+             * @description Lifetime in seconds. Default one year, at most 20 years.
+             * @default 31536000
+             */
+            ttl_seconds?: number;
+        };
+        RotateServiceAccountKeyRequest: {
+            /** @description Lifetime of the new key in seconds. Default is the old key's `ttl_seconds`. */
+            ttl_seconds?: number;
+        };
         LoginRequest: {
             username: string;
             /** Format: password */
@@ -1093,8 +1241,9 @@ export interface components {
             };
         };
         /**
-         * @description The token is valid but not accepted here (code `forbidden`): a legacy-scoped token used
-         *     outside the `legacy` operations.
+         * @description The token is valid but not accepted here (code `forbidden`): a legacy-scoped token or a
+         *     service account key used outside the operations that list its scope in `x-token-scopes`, or a
+         *     key used on an operation that needs a session token.
          */
         Forbidden: {
             headers: {
@@ -1154,6 +1303,7 @@ export interface components {
     };
     parameters: {
         DeviceId: string;
+        ServiceAccountKeyId: string;
         DdnsId: string;
         /** @description The device's id (UUID) or its name, compared case-insensitively. */
         LegacyDevice: string;
@@ -1311,6 +1461,123 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    rotateServiceAccountKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RotateServiceAccountKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description The new key */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccountKeyCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description The key was already rotated and its successor is no longer usable (revoked or expired);
+             *     create a new key.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listServiceAccountKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's keys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ServiceAccountKey"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createServiceAccountKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceAccountKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description The new key; `key` is shown only here */
+            201: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceAccountKeyCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokeServiceAccountKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["ServiceAccountKeyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listDevices: {
@@ -1337,6 +1604,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     createDevice: {
@@ -1387,6 +1655,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -1486,6 +1755,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
@@ -1512,6 +1782,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["TooManyRequests"];
@@ -1538,6 +1809,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -1567,6 +1839,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -1596,6 +1869,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getCommand: {
@@ -1619,6 +1893,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -1641,6 +1916,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getSystemInfo: {
@@ -1662,6 +1938,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getControllerKey: {
@@ -1712,6 +1989,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listDdnsConfigs: {
