@@ -122,8 +122,8 @@ export const ActivityScreen: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-[1_1_30rem]">
           <h1 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
             Activity & Command Timeline
           </h1>
@@ -138,10 +138,10 @@ export const ActivityScreen: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportJson}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
+            className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
           >
             <Download size={14} />
             <span>Export JSON</span>
@@ -151,7 +151,7 @@ export const ActivityScreen: React.FC = () => {
             onClick={clearActivities}
             disabled={localCount === 0}
             title="Removes the browser-local events (probe results) only. The Controller's activity log cannot be cleared."
-            className="disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-red-600 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
+            className="disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:text-red-600 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700 rounded-lg shadow-xs transition-colors"
           >
             <Trash2 size={14} />
             <span>Clear local events{localCount > 0 ? ` (${localCount})` : ''}</span>
