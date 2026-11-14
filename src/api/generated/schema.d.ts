@@ -807,7 +807,7 @@ export interface components {
             id: string;
             name: string;
             zone_id: string;
-            /** @description Cloudflare record id */
+            /** @description Cloudflare record id, chosen from the record lookup when the configuration was created. */
             record_id: string;
             /** @example home.example.com */
             record_name: string;
@@ -827,7 +827,7 @@ export interface components {
             dns_value?: string;
             /**
              * Format: date-time
-             * @description Last discovery/comparison run
+             * @description Last discovery/comparison run, whether or not it changed the record.
              */
             last_checked_at?: string;
             /** Format: date-time */
@@ -1156,6 +1156,7 @@ export interface operations {
                     "application/json": components["schemas"]["DeviceList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };
@@ -1259,6 +1260,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     removeDeviceAgent: {
@@ -1384,6 +1386,7 @@ export interface operations {
                     "application/json": components["schemas"]["StatusHistory"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
@@ -1412,6 +1415,7 @@ export interface operations {
                     "application/json": components["schemas"]["CommandList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };
