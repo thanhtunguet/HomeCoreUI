@@ -5,6 +5,7 @@ import { formatRelative } from '../../api/format';
 import { legacyEndpoints } from '../../api/legacy';
 import { StatusBadge } from '../common/StatusBadge';
 import { DeviceIcon } from '../common/DeviceIcon';
+import { AgentSetupPanel } from './AgentSetupPanel';
 import {
   X,
   Zap,
@@ -447,6 +448,19 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
                     <span className="text-neutral-500 dark:text-neutral-400">Command Auth</span>
                     <span className="text-neutral-800 dark:text-neutral-200">Ed25519 signed by Controller</span>
                   </div>
+                  <details className="pt-2 mt-1 border-t border-neutral-200 dark:border-neutral-700/60 group">
+                    <summary className="cursor-pointer select-none font-medium text-emerald-600 dark:text-emerald-400 hover:underline">
+                      Install or re-install the Agent
+                    </summary>
+                    <div className="pt-3">
+                      <AgentSetupPanel
+                        agentId={device.shutdown.agentId}
+                        port={device.shutdown.agentPort}
+                        scheme={device.shutdown.agentScheme}
+                        deviceOs={device.os}
+                      />
+                    </div>
+                  </details>
                 </>
               )}
             </div>

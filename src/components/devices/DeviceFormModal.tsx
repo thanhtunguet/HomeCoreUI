@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Device, DeviceType, OperatingSystem } from '../../types';
 import { CustomSelect } from '../common/CustomSelect';
+import { AgentSetupPanel } from './AgentSetupPanel';
+import { newAgentId } from '../../api/agentCommand';
 import {
   X,
   Server,
@@ -505,7 +507,11 @@ export const DeviceFormModal: React.FC = () => {
                 <input
                   type="checkbox"
                   checked={shutdownEnabled}
-                  onChange={e => setShutdownEnabled(e.target.checked)}
+                  onChange={e => {
+                    setShutdownEnabled(e.target.checked);
+                    // A new binding starts with a fresh id, so the command below is ready to copy.
+                    if (e.target.checked && !agentId.trim()) setAgentId(newAgentId());
+                  }}
                   className="rounded text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className="font-medium text-neutral-800 dark:text-neutral-200">
@@ -532,7 +538,7 @@ export const DeviceFormModal: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      placeholder="from the agent's data_dir/agent_id file"
+                      placeholder="generated below, or the id of an agent that is already installed"
                       value={agentId}
                       onChange={e => setAgentId(e.target.value)}
                       pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
@@ -569,11 +575,21 @@ export const DeviceFormModal: React.FC = () => {
                     </div>
                   </div>
 
+                  <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800">
+                    <AgentSetupPanel
+                      agentId={agentId}
+                      port={agentPort}
+                      scheme={agentScheme}
+                      deviceOs={os}
+                      onGenerate={() => setAgentId(newAgentId())}
+                    />
+                  </div>
+
                   <div className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/40 border border-neutral-200 dark:border-neutral-800 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
                         <KeyRound size={13} />
-                        <span>Controller public key (paste into the agent's <code>trusted_controllers</code>)</span>
+                        <span>Controller public key (only for an agent configured with a file: <code>trusted_controllers</code>)</span>
                       </span>
                       {controllerKey && (
                         <button type="button" onClick={copyKey} className="text-emerald-600 dark:text-emerald-400 hover:underline text-[11px] font-medium shrink-0 ml-2">
