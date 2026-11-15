@@ -27,7 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const {
     activeTab,
     setActiveTab,
-    sidebarCollapsed,
+    sidebarCollapsed: sidebarCollapsedState,
     setSidebarCollapsed,
     onlineCount,
     totalDevices,
@@ -36,6 +36,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     username,
     logout
   } = useApp();
+
+  // The mobile drawer (onCloseMobile set) is always shown expanded.
+  const sidebarCollapsed = sidebarCollapsedState && !onCloseMobile;
 
   const navItems = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
@@ -53,7 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`h-screen bg-neutral-50 dark:bg-neutral-900/60 border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between transition-all duration-200 ${
+      className={`h-screen bg-neutral-50 dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between transition-all duration-200 ${
         sidebarCollapsed ? 'w-16' : 'w-60'
       } ${className}`}
     >

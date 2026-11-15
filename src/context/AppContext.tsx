@@ -159,7 +159,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Navigation
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [ambientMode, setAmbientMode] = useState<boolean>(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  // Below lg the sidebar overlaps the content, so start collapsed to the icon rail.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(
+    () => typeof window !== 'undefined' && !window.matchMedia('(min-width: 1024px)').matches,
+  );
 
   // Theme
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {

@@ -25,14 +25,25 @@ import { CommandPalette } from './components/common/CommandPalette';
 import { AmbientClockMode } from './components/ambient/AmbientClockMode';
 
 const AppContent: React.FC = () => {
-  const { activeTab, selectedDevice, setSelectedDevice, ambientMode } = useApp();
+  const { activeTab, selectedDevice, setSelectedDevice, ambientMode, sidebarCollapsed, setSidebarCollapsed } = useApp();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 flex flex-col md:flex-row transition-colors">
       {/* Desktop & Tablet Sidebar */}
-      <Sidebar className="hidden md:flex shrink-0 sticky top-0" />
+      {/* Below lg the sidebar floats over the content (fixed) and the main pane keeps a
+          constant collapsed-width margin; from lg up it sits in the flex flow again. */}
+      <Sidebar className="hidden md:flex shrink-0 fixed inset-y-0 left-0 z-30 lg:sticky lg:top-0 lg:z-auto" />
+
+      {/* Tablet backdrop: tap outside the expanded, overlapping sidebar to collapse it */}
+      {!sidebarCollapsed && (
+        <div
+          className="hidden md:block lg:hidden fixed inset-0 z-20 bg-black/30"
+          onClick={() => setSidebarCollapsed(true)}
+          aria-hidden="true"
+        ></div>
+      )}
 
       {/* Mobile Drawer Backdrop & Sidebar */}
       {mobileMenuOpen && (
@@ -48,7 +59,7 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-6">
+      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-6 md:ml-16 lg:ml-0">
         <TopBar
           onOpenCommandPalette={() => setCommandPaletteOpen(true)}
           onToggleMobileMenu={() => setMobileMenuOpen(true)}

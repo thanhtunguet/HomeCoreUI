@@ -57,7 +57,7 @@ export const DashboardScreen: React.FC = () => {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* 1. System Overview: Is HomeCore Running Normally? */}
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Core Status & Uptime */}
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-neutral-500 dark:text-neutral-400 text-xs mb-1">

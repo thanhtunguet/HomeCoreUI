@@ -74,13 +74,13 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* Zone 2: Search Trigger */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-1 items-center gap-2 min-w-0">
         <button
           onClick={onOpenCommandPalette}
-          className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
+          className="hidden md:flex w-full items-center gap-2 px-3 py-1.5 text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg hover:border-neutral-300 dark:hover:border-neutral-700 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
         >
           <Search size={14} className="text-neutral-400" />
-          <span>Search devices, actions...</span>
+          <span className="flex-1 text-left truncate">Search devices, actions...</span>
           <kbd className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
             ⌘K
           </kbd>
@@ -93,10 +93,11 @@ export const TopBar: React.FC<TopBarProps> = ({
         <button
           onClick={() => setAmbientMode(true)}
           title="Open Ambient Clock Screensaver (for OLED / Wall mount display)"
+          aria-label="Ambient Display"
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors"
         >
           <Clock size={15} />
-          <span className="hidden sm:inline">Ambient Display</span>
+          <span className="hidden lg:inline">Ambient Display</span>
         </button>
 
         {/* Theme Toggle */}
@@ -113,11 +114,13 @@ export const TopBar: React.FC<TopBarProps> = ({
         {activeTab === 'ddns' ? (
           <button
             onClick={() => triggerDDNSSync()}
+            aria-label="Sync DNS"
+            title="Sync DNS"
             disabled={!ddnsConfig || ddnsConfig.status === 'updating'}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
           >
             <RefreshCw size={14} className={ddnsConfig?.status === 'updating' ? 'animate-spin' : ''} />
-            <span>Sync DNS</span>
+            <span className="hidden lg:inline">Sync DNS</span>
           </button>
         ) : (
           <button
@@ -125,10 +128,12 @@ export const TopBar: React.FC<TopBarProps> = ({
               setEditingDevice(null);
               setDeviceModalOpen(true);
             }}
+            aria-label="Add Device"
+            title="Add Device"
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors whitespace-nowrap shadow-sm shadow-emerald-950/20"
           >
             <Plus size={14} />
-            <span>Add Device</span>
+            <span className="hidden lg:inline">Add Device</span>
           </button>
         )}
       </div>
