@@ -4,6 +4,7 @@ import { Device } from '../../types';
 import { formatRelative } from '../../api/format';
 import { legacyEndpoints } from '../../api/legacy';
 import { StatusBadge } from '../common/StatusBadge';
+import { PowerStateBadge } from '../common/PowerStateBadge';
 import { DeviceIcon } from '../common/DeviceIcon';
 import { AgentSetupPanel } from './AgentSetupPanel';
 import {
@@ -178,6 +179,22 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
     }
   };
 
+  // Power on and Power off are opposites: only the one that applies to the current state is enabled.
+  const powerBusy = device.powerTransition !== 'none' || isPowerLocked(device.id);
+  const isOnline = device.status === 'online';
+  const canPowerOn = device.wol.enabled && !isOnline && !powerBusy;
+  const canPowerOff = device.shutdown.enabled && isOnline && !powerBusy;
+  const powerOnHint = !device.wol.enabled
+    ? 'Wake-on-LAN is not enabled for this device'
+    : isOnline
+    ? 'Device is already online'
+    : 'Send a Wake-on-LAN packet';
+  const powerOffHint = !device.shutdown.enabled
+    ? 'HomeCore Shutdown Agent not enabled for this host'
+    : !isOnline
+    ? 'Device is not online'
+    : 'Shut the device down through its Agent';
+
   // Filter activities related to this device
   const deviceActivities = activities.filter(a => a.deviceId === device.id);
 
@@ -228,62 +245,57 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
           </div>
         </div>
 
-        {/* Quick Action Bar */}
-        <div className="px-5 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/30 dark:bg-neutral-900/30 flex items-center gap-2">
-          {/* Check Status */}
-          <button
-            onClick={handleProbe}
-            disabled={probing}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={probing ? 'animate-spin text-emerald-500' : ''} />
-            <span>{probing ? 'Probing Port...' : 'Check Status Now'}</span>
-          </button>
-
-          {/* Wake Button */}
-          {device.wol.enabled ? (
+        {/* Device Status: refresh + the two opposite power actions */}
+        <section
+          aria-label="Device Status"
+          className="px-5 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/30 dark:bg-neutral-900/30 space-y-2.5"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+                <Activity size={14} />
+                <span>Device Status</span>
+              </h3>
+              <PowerStateBadge status={device.status} transition={device.powerTransition} />
+            </div>
             <button
+              type="button"
+              onClick={handleProbe}
+              disabled={probing}
+              title="Refresh status"
+              aria-label="Refresh status"
+              className="p-1.5 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={probing ? 'animate-spin text-emerald-500' : ''} />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Power on: wakes an offline machine (Wake-on-LAN) */}
+            <button
+              type="button"
               onClick={() => startWakeFlow(device)}
-              disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
-              className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-colors"
+              disabled={!canPowerOn}
+              title={powerOnHint}
+              className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 enabled:hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-colors"
             >
               <Zap size={14} className="text-emerald-500" />
-              <span>Wake Device</span>
+              <span>Power on</span>
             </button>
-          ) : (
-            <div
-              title="Wake-on-LAN is not enabled for this device"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-400 dark:text-neutral-500 bg-neutral-100/50 dark:bg-neutral-800/30 border border-neutral-200/50 dark:border-neutral-800 rounded-lg cursor-not-allowed"
-            >
-              <Zap size={14} />
-              <span>WOL Disabled</span>
-            </div>
-          )}
 
-          {/* Shutdown Button */}
-          {device.shutdown.enabled && device.status === 'online' ? (
+            {/* Power off: signed shutdown of an online machine via the Agent */}
             <button
+              type="button"
               onClick={() => requestShutdownConfirmation(device)}
-              disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
-              className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors"
+              disabled={!canPowerOff}
+              title={powerOffHint}
+              className="disabled:opacity-50 disabled:cursor-not-allowed flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 enabled:hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-colors"
             >
               <Power size={14} className="text-red-500" />
-              <span>Shutdown</span>
+              <span>Power off</span>
             </button>
-          ) : (
-            <div
-              title={
-                !device.shutdown.enabled
-                  ? 'HomeCore Shutdown Agent not enabled for this host'
-                  : 'Device is offline'
-              }
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-400 dark:text-neutral-500 bg-neutral-100/50 dark:bg-neutral-800/30 border border-neutral-200/50 dark:border-neutral-800 rounded-lg cursor-not-allowed"
-            >
-              <Power size={14} />
-              <span>Shutdown N/A</span>
-            </div>
-          )}
-        </div>
+          </div>
+        </section>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">

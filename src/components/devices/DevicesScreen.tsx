@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Device, DeviceStatus } from '../../types';
-import { StatusBadge } from '../common/StatusBadge';
+import { PowerStateBadge } from '../common/PowerStateBadge';
 import { DeviceIcon } from '../common/DeviceIcon';
 import {
   Search,
@@ -180,7 +180,7 @@ export const DevicesScreen: React.FC = () => {
                       </div>
                     </div>
 
-                    <StatusBadge status={device.status} />
+                    <PowerStateBadge status={device.status} transition={device.powerTransition} />
                   </div>
 
                   {/* Network details strip */}
@@ -318,7 +318,7 @@ export const DevicesScreen: React.FC = () => {
                       </td>
 
                       <td className="py-3 px-4">
-                        <StatusBadge status={device.status} />
+                        <PowerStateBadge status={device.status} transition={device.powerTransition} />
                       </td>
 
                       <td className="py-3 px-4 font-mono text-neutral-800 dark:text-neutral-200">
