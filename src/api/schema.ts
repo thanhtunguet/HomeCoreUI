@@ -28,6 +28,14 @@ export type ServiceKey = Res<'ServiceAccountKey'>;
 export type ServiceKeyCreated = Res<'ServiceAccountKeyCreated'>;
 export type ServiceKeyCreate = Req<'CreateServiceAccountKeyRequest'>;
 
+/** Alert channels (ADR-021). The secret (`secret`, the bot token) is write-only: responses carry `has_secret`. */
+export type AlertEvent = Schemas['AlertEvent'];
+export type AlertChannelType = Schemas['AlertChannelType'];
+export type AlertChannel = Res<'AlertChannel'>;
+export type AlertChannelCreate = Req<'AlertChannelCreate'>;
+export type AlertChannelUpdate = Req<'AlertChannelUpdate'>;
+export type AlertTestResult = Res<'AlertTestResult'>;
+
 export type ApiDeviceStatus = Schemas['DeviceStatus'];
 export type PowerTransition = Schemas['PowerTransition'];
 export type DeviceType = Schemas['DeviceType'];

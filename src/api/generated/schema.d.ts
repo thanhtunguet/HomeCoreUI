@@ -599,6 +599,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List alert channels */
+        get: operations["listAlertChannels"];
+        put?: never;
+        /**
+         * Add an alert channel
+         * @description A channel is one destination for alerts, served by an adapter (`type`). Every adapter takes
+         *     non-secret `settings` (string values) and one `secret`, which is sealed at rest and never
+         *     returned. `telegram`: `settings.target_user_id` is the numeric Telegram user (or group) id
+         *     that receives the messages, `secret` is the bot token from BotFather. The target must have
+         *     started a chat with the bot first, or Telegram refuses to deliver.
+         */
+        post: operations["createAlertChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/channels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AlertChannelId"];
+            };
+            cookie?: never;
+        };
+        /** Get one alert channel */
+        get: operations["getAlertChannel"];
+        put?: never;
+        post?: never;
+        /** Delete an alert channel */
+        delete: operations["deleteAlertChannel"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an alert channel (partial)
+         * @description `type` cannot change. `settings`, when present, replaces all settings of the channel;
+         *     `events`, when present, replaces the subscription. The `secret` is changed only when given.
+         */
+        patch: operations["updateAlertChannel"];
+        trace?: never;
+    };
+    "/api/v1/alerts/channels/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AlertChannelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test message through a channel now
+         * @description Works on a disabled channel too. A delivery that fails is a `200` with `result: failed` and
+         *     the reason in `error`, because the request itself worked (as for `syncDdnsConfig`).
+         */
+        post: operations["testAlertChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/turn-on": {
         parameters: {
             query?: never;
@@ -668,6 +741,48 @@ export interface paths {
         get: operations["legacyIsOnline"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * MCP server for AI agents (Streamable HTTP, JSON-RPC 2.0)
+         * @description The Controller's Model Context Protocol endpoint (ADR-020). An MCP client connects to this URL
+         *     and authenticates with a **service account key** (`Authorization: Bearer <key>`); a session
+         *     token is refused with `403`. Any valid key is accepted whatever its scope: there is no
+         *     per-tool permission.
+         *
+         *     The transport is stateless Streamable HTTP without server-sent events: each `POST` carries one
+         *     JSON-RPC 2.0 message (batches are not supported) and, for a request, is answered with
+         *     `application/json`. Notifications and client responses are answered `202` with no body.
+         *     `GET` and `DELETE` are `405`.
+         *
+         *     Methods: `initialize`, `ping`, `tools/list`, `tools/call`. Tools:
+         *
+         *     * `list_devices`: every device with its current status.
+         *     * `get_devices`: one device, by id or name.
+         *     * `control_device`: `action` is `turn_on` (Wake-on-LAN), `turn_off` (signed shutdown through the
+         *       device's agent) or `check_status` (probe now). Same rules as the REST operations: idempotent,
+         *       asynchronous, at most one power request per device per second, audited with the key's
+         *       owner and key id.
+         *
+         *     Errors in a tool call (unknown device, device cannot be powered, throttled) are returned as a
+         *     tool result with `isError: true`, so the agent can read them; protocol errors are JSON-RPC
+         *     errors. Request and response bodies are defined by the MCP specification, not by this
+         *     document.
+         */
+        post: operations["callMcp"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1176,6 +1291,75 @@ export interface components {
             api_token?: $Write<string>;
         };
         /**
+         * @description `ip_changed`: a DDNS record was moved to a new public IP address. `power_command`: a wake or
+         *     shutdown request was accepted (any client: UI, legacy endpoints, MCP). `status_changed`: a
+         *     monitored device went online or offline **without** a wake/shutdown command in progress,
+         *     for example the machine lost power or was switched on by hand.
+         * @enum {string}
+         */
+        AlertEvent: "ip_changed" | "power_command" | "status_changed";
+        /** @enum {string} */
+        AlertChannelType: "telegram";
+        AlertChannel: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: components["schemas"]["AlertChannelType"];
+            enabled: boolean;
+            events: components["schemas"]["AlertEvent"][];
+            /** @description Non-secret adapter settings (`telegram`: `target_user_id`). */
+            settings: {
+                [key: string]: string;
+            };
+            /** @description The secret itself is never returned. */
+            has_secret: boolean;
+            /**
+             * Format: date-time
+             * @description Last successful delivery (including tests).
+             */
+            last_sent_at?: string;
+            /** @description Reason of the last failed delivery; cleared by the next success. */
+            last_error?: string;
+            /** Format: date-time */
+            last_error_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AlertChannelCreate: {
+            name: string;
+            type: components["schemas"]["AlertChannelType"];
+            /** @default true */
+            enabled?: boolean;
+            /** @description Defaults to every event. */
+            events?: components["schemas"]["AlertEvent"][];
+            settings: {
+                [key: string]: string;
+            };
+            /** @description `telegram`: the bot token. */
+            secret: $Write<string>;
+        };
+        AlertChannelUpdate: {
+            name?: string;
+            enabled?: boolean;
+            events?: components["schemas"]["AlertEvent"][];
+            settings?: {
+                [key: string]: string;
+            };
+            secret?: $Write<string>;
+        };
+        AlertTestResult: {
+            /** Format: uuid */
+            channel_id: string;
+            /** @enum {string} */
+            result: "sent" | "failed";
+            /** Format: date-time */
+            sent_at: string;
+            /** @description Present when `result` is `failed`; never contains the secret. */
+            error?: string;
+        };
+        /**
          * @description Credentials for a Cloudflare lookup: give **exactly one** of `api_token` (a token the user is
          *     typing into the form, not yet saved) or `config_id` (reuse the sealed token of an existing
          *     DDNS configuration). Neither or both: `400`.
@@ -1305,6 +1489,7 @@ export interface components {
         DeviceId: string;
         ServiceAccountKeyId: string;
         DdnsId: string;
+        AlertChannelId: string;
         /** @description The device's id (UUID) or its name, compared case-insensitively. */
         LegacyDevice: string;
         Limit: number;
@@ -2174,6 +2359,156 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listAlertChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alert channels, ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AlertChannel"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AlertChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The channel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AlertChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AlertChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    testAlertChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["AlertChannelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertTestResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     legacyTurnOn: {
         parameters: {
             query: {
@@ -2241,6 +2576,54 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    callMcp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description The JSON-RPC response to a request (a result or an error object). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description A notification or a client response was accepted; there is no body. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The body is not valid JSON or not a single JSON-RPC message. The body is a JSON-RPC error object. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
 }

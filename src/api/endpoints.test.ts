@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { apiError, json, mockFetch, mockFetchAll, putSession, stubLocalStorage } from '../test/helpers';
-import { createDevice, createServiceAccountKey, listServiceAccountKeys, revokeServiceAccountKey, listActivity, getDeviceHistory, listCloudflareRecords, listCloudflareZones, listCommands, listDevices, removeDeviceAgent } from './endpoints';
+import { createAlertChannel, deleteAlertChannel, listAlertChannels, testAlertChannel, updateAlertChannel, createDevice, createServiceAccountKey, listServiceAccountKeys, revokeServiceAccountKey, listActivity, getDeviceHistory, listCloudflareRecords, listCloudflareZones, listCommands, listDevices, removeDeviceAgent } from './endpoints';
 
 const dev = (id: string, name: string) => ({ id, name });
 
@@ -161,5 +161,43 @@ describe('service account keys', () => {
     await expect(createServiceAccountKey({ name: 'x', scope: 'mcp', ttl_seconds: 5 })).rejects.toMatchObject({ status: 400, code: 'bad_request' });
     mockFetchAll(() => apiError(404, 'not_found', 'service account key not found'));
     await expect(revokeServiceAccountKey('nope')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('alert channels', () => {
+  const ch = { id: 'a1', name: 'phone', type: 'telegram', enabled: true, events: ['ip_changed'], settings: { target_user_id: '42' }, has_secret: true, created_at: '2026-11-15T00:00:00Z', updated_at: '2026-11-15T00:00:00Z' };
+
+  it('lists channels without paging and returns no secret', async () => {
+    const { calls } = mockFetchAll(() => json({ items: [ch] }));
+    expect(await listAlertChannels()).toEqual([ch]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].query.has('cursor')).toBe(false);
+  });
+
+  it('creates with exactly the body it is given', async () => {
+    const { calls } = mockFetchAll(() => json(ch, { status: 201 }));
+    const body = { name: 'phone', type: 'telegram' as const, settings: { target_user_id: '42' }, secret: '123456789:AAH-test_token_0123456789abcdefghij' };
+    await createAlertChannel(body);
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].path).toBe('/api/v1/alerts/channels');
+    expect(calls[0].body).toEqual(body);
+  });
+
+  it('updates with PATCH and tests with POST .../test', async () => {
+    const { calls } = mockFetchAll(c => (c.path.endsWith('/test') ? json({ channel_id: 'a1', result: 'failed', sent_at: '2026-11-15T00:00:00Z', error: 'telegram: 403 Forbidden' }) : json(ch)));
+    await updateAlertChannel('a1', { enabled: false });
+    expect(calls[0].method).toBe('PATCH');
+    expect(calls[0].body).toEqual({ enabled: false });
+    const r = await testAlertChannel('a1');
+    expect(calls[1].path).toBe('/api/v1/alerts/channels/a1/test');
+    expect(r).toMatchObject({ result: 'failed', error: 'telegram: 403 Forbidden' });
+  });
+
+  it('deletes with DELETE and treats 204 as success; surfaces 409 for a taken name', async () => {
+    const { calls } = mockFetchAll(() => new Response(null, { status: 204 }));
+    await expect(deleteAlertChannel('a1')).resolves.toBeUndefined();
+    expect(calls[0].method).toBe('DELETE');
+    mockFetchAll(() => apiError(409, 'conflict', 'an alert channel with this name already exists'));
+    await expect(createAlertChannel({ name: 'phone', type: 'telegram', settings: { target_user_id: '1' }, secret: 'x' })).rejects.toMatchObject({ status: 409 });
   });
 });

@@ -55,6 +55,13 @@ const calls: Record<string, () => Promise<unknown>> = {
   listServiceAccountKeys: () => endpoints.listServiceAccountKeys(),
   createServiceAccountKey: () => endpoints.createServiceAccountKey({ name: 'n', scope: 'mcp', ttl_seconds: 3600 }),
   revokeServiceAccountKey: () => endpoints.revokeServiceAccountKey(ID),
+  listAlertChannels: () => endpoints.listAlertChannels(),
+  getAlertChannel: () => endpoints.getAlertChannel(ID),
+  createAlertChannel: () =>
+    endpoints.createAlertChannel({ name: 'n', type: 'telegram', settings: { target_user_id: '1' }, secret: '123456789:AAH-test_token_0123456789abcdefghij' }),
+  updateAlertChannel: () => endpoints.updateAlertChannel(ID, { enabled: false }),
+  deleteAlertChannel: () => endpoints.deleteAlertChannel(ID),
+  testAlertChannel: () => endpoints.testAlertChannel(ID),
   listDevices: () => endpoints.listDevices(),
   createDevice: () => endpoints.createDevice({ name: 'n', ip_address: '10.0.0.2', monitor_port: 22 }),
   updateDevice: () => endpoints.updateDevice(ID, { name: 'n' }),
@@ -162,6 +169,16 @@ describe('spec facts the UI relies on', () => {
     const ttl = sc.CreateServiceAccountKeyRequest.properties.ttl_seconds;
     expect([ttl.minimum, ttl.maximum, ttl.default]).toEqual([60, 630720000, 31536000]);
     expect(sc.ServiceAccountKey.properties.status.enum).toEqual(['active', 'rotated', 'expired', 'revoked']);
+  });
+
+  it('alert channels: the secret is write-only, events and adapter names are the ones the UI offers', () => {
+    const sc = spec.components.schemas;
+    expect(sc.AlertEvent.enum).toEqual(['ip_changed', 'power_command', 'status_changed']);
+    expect(sc.AlertChannelType.enum).toEqual(['telegram']);
+    expect(sc.AlertChannel.properties.secret).toBeUndefined();
+    expect(sc.AlertChannel.properties.has_secret).toBeDefined();
+    expect(sc.AlertChannelCreate.properties.secret.writeOnly).toBe(true);
+    expect(sc.AlertChannelCreate.required).toEqual(expect.arrayContaining(['name', 'type', 'settings', 'secret']));
   });
 
   it('Cloudflare lookups take api_token or config_id', () => {

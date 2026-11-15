@@ -7,6 +7,10 @@ import { request } from './client';
 import type {
   AgentBinding,
   ActivityCategory,
+  AlertChannel,
+  AlertChannelCreate,
+  AlertChannelUpdate,
+  AlertTestResult,
   ActivityItem,
   ApiCommand,
   ApiDdnsConfig,
@@ -79,6 +83,18 @@ export const createServiceAccountKey = (body: ServiceKeyCreate) =>
   request<ServiceKeyCreated>('/api/v1/service-account-keys', { method: 'POST', body });
 /** Idempotent: 204 for a key that is already revoked; 404 for an unknown key or another user's. */
 export const revokeServiceAccountKey = (id: string) => request<void>(`/api/v1/service-account-keys/${id}`, { method: 'DELETE' });
+
+// alert channels (session token required; a service key gets 403)
+export const listAlertChannels = () => request<{ items: AlertChannel[] }>('/api/v1/alerts/channels').then(r => r.items);
+export const getAlertChannel = (id: string) => request<AlertChannel>(`/api/v1/alerts/channels/${id}`);
+export const createAlertChannel = (body: AlertChannelCreate) =>
+  request<AlertChannel>('/api/v1/alerts/channels', { method: 'POST', body });
+/** `settings` replaces all settings; `secret` is sent only to change it (the stored one is never returned). */
+export const updateAlertChannel = (id: string, body: AlertChannelUpdate) =>
+  request<AlertChannel>(`/api/v1/alerts/channels/${id}`, { method: 'PATCH', body });
+export const deleteAlertChannel = (id: string) => request<void>(`/api/v1/alerts/channels/${id}`, { method: 'DELETE' });
+/** Sends a test message now. A delivery failure is a normal 200 with `result: 'failed'` and the reason. */
+export const testAlertChannel = (id: string) => request<AlertTestResult>(`/api/v1/alerts/channels/${id}/test`, { method: 'POST' });
 
 // devices
 export const listDevices = () => collect<ApiDevice>('/api/v1/devices');
