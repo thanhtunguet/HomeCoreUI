@@ -236,29 +236,30 @@ export const DevicesScreen: React.FC = () => {
                       </span>
                     )}
 
-                    {/* Remote Shutdown Action */}
-                    {device.shutdown.enabled && device.status === 'online' ? (
-                      <button
-                        onClick={() => requestShutdownConfirmation(device)}
-                        disabled={device.powerTransition !== 'none' || isPowerLocked(device.id)}
-                        title="Send Remote Shutdown Command via Agent"
-                        className="disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg flex items-center gap-1 transition-colors"
-                      >
-                        <Power size={13} className="text-red-500" />
-                        <span>Power</span>
-                      </button>
-                    ) : (
-                      <span
-                        title={
-                          !device.shutdown.enabled
-                            ? 'HomeCore Shutdown Agent not enabled'
-                            : 'Device is offline'
-                        }
-                        className="text-[11px] text-neutral-400 px-1.5 py-0.5 cursor-not-allowed"
-                      >
-                        Pwr n/a
-                      </span>
-                    )}
+                    {/* Remote Shutdown Action: disabled (not hidden) when it cannot apply */}
+                    {(() => {
+                      const canPowerOff = device.shutdown.enabled && device.status === 'online';
+                      const hint = !device.shutdown.enabled
+                        ? 'HomeCore Shutdown Agent not enabled'
+                        : device.status !== 'online'
+                        ? 'Device is offline'
+                        : 'Send Remote Shutdown Command via Agent';
+                      return (
+                        <button
+                          onClick={() => requestShutdownConfirmation(device)}
+                          disabled={!canPowerOff || device.powerTransition !== 'none' || isPowerLocked(device.id)}
+                          title={hint}
+                          className={`disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1 text-xs font-medium rounded-lg flex items-center gap-1 transition-colors ${
+                            canPowerOff
+                              ? 'text-red-700 dark:text-red-300 bg-red-500/10 hover:bg-red-500/20'
+                              : 'text-neutral-500 bg-neutral-100 dark:bg-neutral-800'
+                          }`}
+                        >
+                          <Power size={13} className={canPowerOff ? 'text-red-500' : 'text-neutral-400'} />
+                          <span>Power off</span>
+                        </button>
+                      );
+                    })()}
 
                     {/* Single Check Probe */}
                     <button

@@ -17,6 +17,7 @@ import {
 } from '../../api/serviceKeys';
 import type { KeyTone } from '../../api/serviceKeys';
 import { errMsg } from '../../context/AppContext';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 
 const inputCls =
   'w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-neutral-900 dark:text-neutral-100 text-xs';
@@ -82,6 +83,7 @@ export const ServiceKeysSection: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<ServiceKeyCreated | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [confirmRevoke, setConfirmRevoke] = useState<ServiceKey | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -118,7 +120,7 @@ export const ServiceKeysSection: React.FC = () => {
   };
 
   const revoke = async (k: ServiceKey) => {
-    if (!window.confirm(`Revoke "${k.name}"? Anything still using this key stops working immediately.`)) return;
+    setConfirmRevoke(null);
     setRevoking(k.id);
     setRowError(null);
     try {
@@ -215,7 +217,7 @@ export const ServiceKeysSection: React.FC = () => {
                   <button
                     type="button"
                     disabled={revoking === k.id}
-                    onClick={() => void revoke(k)}
+                    onClick={() => setConfirmRevoke(k)}
                     className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
                     aria-label={`Revoke ${k.name}`}
                   >
@@ -311,6 +313,14 @@ export const ServiceKeysSection: React.FC = () => {
           <span>{creating ? 'Creating…' : 'Create key'}</span>
         </button>
       </form>
+      <ConfirmDialog
+        open={confirmRevoke !== null}
+        title="Revoke service key?"
+        message={`Revoke "${confirmRevoke?.name ?? ''}"? Anything still using this key stops working immediately.`}
+        confirmLabel="Revoke key"
+        onConfirm={() => confirmRevoke && void revoke(confirmRevoke)}
+        onCancel={() => setConfirmRevoke(null)}
+      />
     </section>
   );
 };

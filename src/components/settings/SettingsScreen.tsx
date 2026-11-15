@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { getSystemInfo } from '../../api/endpoints';
 import type { SystemInfo } from '../../api/schema';
 import { ServiceKeysSection } from './ServiceKeysSection';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import {
   Shield,
   Server,
@@ -42,6 +43,7 @@ export const SettingsScreen: React.FC = () => {
   const [defaultTimeout, setDefaultTimeout] = useState(settings.monitoring.defaultTimeoutMs);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   // Read-only server configuration; absent when the Controller predates GET /system/info.
   const [info, setInfo] = useState<SystemInfo | null>(null);
   useEffect(() => {
@@ -62,16 +64,14 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleResetLocal = () => {
-    if (window.confirm('Clear all HomeCore data stored in this browser (preferences) and sign out?')) {
-      try {
-        Object.keys(localStorage)
-          .filter(k => k.startsWith('homecore_'))
-          .forEach(k => localStorage.removeItem(k));
-      } catch {
-        /* ignore */
-      }
-      window.location.reload();
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('homecore_'))
+        .forEach(k => localStorage.removeItem(k));
+    } catch {
+      /* ignore */
     }
+    window.location.reload();
   };
 
   const copyKey = async () => {
@@ -250,7 +250,7 @@ export const SettingsScreen: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={handleResetLocal}
+            onClick={() => setConfirmReset(true)}
             className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
           >
             <RotateCcw size={14} />
@@ -258,6 +258,14 @@ export const SettingsScreen: React.FC = () => {
           </button>
         </div>
       </form>
+      <ConfirmDialog
+        open={confirmReset}
+        title="Clear browser data?"
+        message="Clear all HomeCore data stored in this browser (preferences) and sign out?"
+        confirmLabel="Clear and sign out"
+        onConfirm={handleResetLocal}
+        onCancel={() => setConfirmReset(false)}
+      />
     </div>
   );
 };

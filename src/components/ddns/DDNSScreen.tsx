@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp, DDNSDraft } from '../../context/AppContext';
 import { CustomSelect, SelectOption } from '../common/CustomSelect';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { DDNSConfig } from '../../types';
 import { cloudflareLookup, recordToDdnsFields } from '../../api/mappers';
 import { useCloudflareLookup } from './useCloudflareLookup';
@@ -65,6 +66,7 @@ export const DDNSScreen: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const lookup = useCloudflareLookup();
 
   const isNew = creating || !ddnsConfig;
@@ -154,7 +156,8 @@ export const DDNSScreen: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!ddnsConfig || !window.confirm(`Stop updating ${ddnsConfig.recordName}? The DNS record itself is not deleted.`)) return;
+    setConfirmDelete(false);
+    if (!ddnsConfig) return;
     const err = await deleteDdns(ddnsConfig.id);
     if (err) setError(err);
   };
@@ -490,7 +493,7 @@ export const DDNSScreen: React.FC = () => {
 
         <div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-2.5">
           {!isNew ? (
-            <button type="button" onClick={handleDelete} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+            <button type="button" onClick={() => setConfirmDelete(true)} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
               <Trash2 size={14} />
               <span>Remove</span>
             </button>
@@ -509,6 +512,14 @@ export const DDNSScreen: React.FC = () => {
           </div>
         </div>
       </form>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Stop DDNS updates?"
+        message={`Stop updating ${ddnsConfig?.recordName ?? 'this record'}? The DNS record itself is not deleted.`}
+        confirmLabel="Stop updating"
+        onConfirm={() => void handleDelete()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 };

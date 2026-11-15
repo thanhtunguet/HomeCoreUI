@@ -6,6 +6,7 @@ import { legacyEndpoints } from '../../api/legacy';
 import { StatusBadge } from '../common/StatusBadge';
 import { PowerStateBadge } from '../common/PowerStateBadge';
 import { DeviceIcon } from '../common/DeviceIcon';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { AgentSetupPanel } from './AgentSetupPanel';
 import {
   X,
@@ -159,6 +160,7 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
   } = useApp();
 
   const [probing, setProbing] = React.useState(false);
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
 
   const handleProbe = async () => {
     setProbing(true);
@@ -173,10 +175,9 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
   };
 
   const handleDelete = () => {
-    if (window.confirm(`Are you sure you want to remove "${device.name}" from HomeCore?`)) {
-      deleteDevice(device.id);
-      onClose();
-    }
+    setConfirmDelete(false);
+    deleteDevice(device.id);
+    onClose();
   };
 
   // Power on and Power off are opposites: only the one that applies to the current state is enabled.
@@ -229,7 +230,7 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
               <Edit2 size={16} />
             </button>
             <button
-              onClick={handleDelete}
+              onClick={() => setConfirmDelete(true)}
               title="Delete Device"
               className="p-1.5 text-neutral-500 hover:text-red-600 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800"
             >
@@ -511,6 +512,14 @@ export const DeviceDetailSheet: React.FC<DeviceDetailSheetProps> = ({
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Remove device?"
+        message={`"${device.name}" will be removed from HomeCore. This cannot be undone.`}
+        confirmLabel="Remove device"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 };
