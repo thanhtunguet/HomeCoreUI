@@ -16,6 +16,8 @@ interface CustomSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Hide the selected option's sublabel on the closed trigger so it is as tall as a text input; the list still shows it. */
+  compactTrigger?: boolean;
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -24,7 +26,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   options,
   placeholder = 'Select an option...',
   disabled = false,
-  className = ''
+  className = '',
+  compactTrigger = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +86,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
             <span className="text-neutral-900 dark:text-neutral-100 font-medium truncate block">
               {selectedOption ? selectedOption.label : placeholder}
             </span>
-            {selectedOption?.sublabel && (
+            {selectedOption?.sublabel && !compactTrigger && (
               <span className="text-[10px] text-neutral-400 font-sans block truncate">
                 {selectedOption.sublabel}
               </span>

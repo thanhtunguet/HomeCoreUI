@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { createPortForward, deletePortForward, listPortForwards, updatePortForward } from '../../api/endpoints';
 import type { PortForward } from '../../api/schema';
@@ -107,6 +107,15 @@ export const PortForwardScreen: React.FC = () => {
     setDraft(emptyDraft());
     setFormError(null);
   };
+
+  useEffect(() => {
+    if (editing === null || saving) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, saving]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,20 +247,34 @@ export const PortForwardScreen: React.FC = () => {
           </ul>
         )}
 
-        {editing === null ? (
-          <button type="button" onClick={() => open('new')} className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors">
-            <Plus size={14} />
-            <span>Add rule</span>
-          </button>
-        ) : (
-          <form onSubmit={submit} className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3" aria-label={isEdit ? 'Edit port forwarding rule' : 'New port forwarding rule'}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium text-neutral-800 dark:text-neutral-200">{isEdit ? `Edit “${editing.name}”` : 'New rule'}</h3>
-              <button type="button" onClick={close} className={ghostBtn} aria-label="Close the form">
+        <button type="button" onClick={() => open('new')} className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors">
+          <Plus size={14} />
+          <span>Add rule</span>
+        </button>
+      </section>
+
+      {editing !== null && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => !saving && close()}
+        >
+          <form
+            onSubmit={submit}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pf-dialog-title"
+            onClick={e => e.stopPropagation()}
+            className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl max-w-xl w-full shadow-2xl flex flex-col max-h-[90vh] text-xs"
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-200 dark:border-neutral-800">
+              <h3 id="pf-dialog-title" className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
+                {isEdit ? `Edit “${editing.name}”` : 'New port forwarding rule'}
+              </h3>
+              <button type="button" onClick={close} disabled={saving} className={ghostBtn} aria-label="Close the form">
                 <X size={13} />
               </button>
             </div>
-
+            <div className="flex-1 overflow-y-auto p-5 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className={label}>
                 <span>Name</span>
@@ -270,6 +293,7 @@ export const PortForwardScreen: React.FC = () => {
                   value={draft.protocol}
                   onChange={v => setDraft({ ...draft, protocol: v as RuleDraft['protocol'] })}
                   options={PROTOCOLS.map(p => ({ value: p.value, label: p.label, sublabel: p.description }))}
+                  compactTrigger
                 />
               </div>
 
@@ -340,7 +364,11 @@ export const PortForwardScreen: React.FC = () => {
                 {formError}
               </p>
             )}
-            <div className="flex gap-2">
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-neutral-200 dark:border-neutral-800">
+              <button type="button" onClick={close} disabled={saving} className={ghostBtn}>
+                Cancel
+              </button>
               <button
                 type="submit"
                 disabled={saving}
@@ -348,13 +376,10 @@ export const PortForwardScreen: React.FC = () => {
               >
                 {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add rule'}
               </button>
-              <button type="button" onClick={close} className={ghostBtn}>
-                Cancel
-              </button>
             </div>
           </form>
-        )}
-      </section>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmDelete !== null}
