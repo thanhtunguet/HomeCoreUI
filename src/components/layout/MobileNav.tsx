@@ -17,7 +17,7 @@ export const MobileNav: React.FC = () => {
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'devices' as const, label: 'Devices', icon: HardDrive },
     { id: 'ddns' as const, label: 'DDNS', icon: Globe },
-    { id: 'portforward' as const, label: 'Forward', icon: ArrowLeftRight },
+    { id: 'portforward' as const, label: 'Tunnel', icon: ArrowLeftRight },
     { id: 'activity' as const, label: 'Activity', icon: Activity },
     { id: 'system' as const, label: 'System', icon: Cpu },
     { id: 'settings' as const, label: 'Settings', icon: Settings },

@@ -135,7 +135,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-left"
               >
                 <ArrowLeftRight size={15} className="text-neutral-400" />
-                <span>Go to Port Forwarding</span>
+                <span>Go to Tunnel</span>
               </button>
 
               <button

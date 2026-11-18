@@ -1,5 +1,5 @@
 /**
- * Helpers for the Port Forwarding screen (ADR-022): connection types, client-side checks of a rule
+ * Helpers for the Tunnel (port forwarding) screen (ADR-022): connection types, client-side checks of a rule
  * (the Controller validates again), the wording of a rule's runtime status and the choices for the
  * local interface. Pure, so it is unit tested.
  */

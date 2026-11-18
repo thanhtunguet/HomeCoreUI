@@ -45,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'devices' as const, label: 'Devices', icon: HardDrive, count: `${onlineCount}/${totalDevices}` },
     { id: 'ddns' as const, label: 'DDNS', icon: Globe },
-    { id: 'portforward' as const, label: 'Port Forwarding', icon: ArrowLeftRight },
+    { id: 'portforward' as const, label: 'Tunnel', icon: ArrowLeftRight },
     { id: 'activity' as const, label: 'Activity', icon: Activity },
     { id: 'system' as const, label: 'System', icon: Cpu },
     { id: 'settings' as const, label: 'Settings', icon: Settings },
@@ -145,15 +145,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <ExternalLink size={12} className="text-neutral-400" />
             </a>
 
-            <div className="px-2.5 py-1 text-[11px] text-neutral-400 dark:text-neutral-500 space-y-0.5">
-              <div className="flex items-center justify-between">
-                <span>Controller</span>
-                <span className="font-mono text-neutral-600 dark:text-neutral-400">{systemMetrics?.localIps[0] ?? window.location.hostname}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>API</span>
-                <span className={`font-medium ${connectionIssue ? 'text-amber-500' : 'text-emerald-500'}`}>
-                  {connectionIssue ? 'Issue' : 'Connected'}
+            <div className="px-2.5 py-1 text-[11px] text-neutral-400 dark:text-neutral-500">
+              <div className="flex items-center justify-between gap-2">
+                <span className="shrink-0">Controller</span>
+                <span
+                  className="min-w-0 truncate font-mono text-neutral-600 dark:text-neutral-400"
+                  title={systemMetrics?.localIps[0] ?? window.location.hostname}
+                >
+                  {systemMetrics?.localIps[0] ?? window.location.hostname}
                 </span>
               </div>
             </div>

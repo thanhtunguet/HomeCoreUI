@@ -180,7 +180,7 @@ export const PortForwardScreen: React.FC = () => {
       <div>
         <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
           <ArrowLeftRight size={18} className="text-neutral-500" />
-          <span>Port Forwarding</span>
+          <span>Tunnel</span>
         </h1>
         <p className="text-neutral-500 dark:text-neutral-400 mt-1">
           This Controller listens on a local interface and relays the traffic to another host. Rules that are switched on come back by themselves after a restart.
@@ -191,7 +191,7 @@ export const PortForwardScreen: React.FC = () => {
       <section className={cardCls}>
         <div className={`${headCls} flex items-start justify-between gap-3`}>
           <h2 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">Rules</h2>
-          <button type="button" onClick={() => void load()} className={ghostBtn} aria-label="Refresh port forwarding rules">
+          <button type="button" onClick={() => void load()} className={ghostBtn} aria-label="Refresh tunnel rules">
             <RefreshCw size={13} />
           </button>
         </div>
@@ -201,7 +201,7 @@ export const PortForwardScreen: React.FC = () => {
         ) : rules === null ? (
           <p className="text-[11px] text-neutral-400">Loading…</p>
         ) : rules.length === 0 ? (
-          <p className="text-[11px] text-neutral-500">No port forwarding rules yet. Add one to start relaying traffic.</p>
+          <p className="text-[11px] text-neutral-500">No tunnel rules yet. Add one to start relaying traffic.</p>
         ) : (
           <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {rules.map(r => {
@@ -268,7 +268,7 @@ export const PortForwardScreen: React.FC = () => {
           >
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-200 dark:border-neutral-800">
               <h3 id="pf-dialog-title" className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
-                {isEdit ? `Edit “${editing.name}”` : 'New port forwarding rule'}
+                {isEdit ? `Edit “${editing.name}”` : 'New tunnel rule'}
               </h3>
               <button type="button" onClick={close} disabled={saving} className={ghostBtn} aria-label="Close the form">
                 <X size={13} />
@@ -383,7 +383,7 @@ export const PortForwardScreen: React.FC = () => {
 
       <ConfirmDialog
         open={confirmDelete !== null}
-        title="Delete port forwarding rule?"
+        title="Delete tunnel rule?"
         message={`Delete "${confirmDelete?.name ?? ''}"? The port stops being forwarded and open connections are dropped.`}
         confirmLabel="Delete rule"
         onConfirm={() => confirmDelete && void remove(confirmDelete)}
