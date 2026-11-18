@@ -12,6 +12,7 @@ import { MobileNav } from './components/layout/MobileNav';
 import { DashboardScreen } from './components/dashboard/DashboardScreen';
 import { DevicesScreen } from './components/devices/DevicesScreen';
 import { DDNSScreen } from './components/ddns/DDNSScreen';
+import { PortForwardScreen } from './components/portforward/PortForwardScreen';
 import { ActivityScreen } from './components/activity/ActivityScreen';
 import { SystemScreen } from './components/system/SystemScreen';
 import { SettingsScreen } from './components/settings/SettingsScreen';
@@ -70,6 +71,7 @@ const AppContent: React.FC = () => {
           {activeTab === 'dashboard' && <DashboardScreen />}
           {activeTab === 'devices' && <DevicesScreen />}
           {activeTab === 'ddns' && <DDNSScreen />}
+          {activeTab === 'portforward' && <PortForwardScreen />}
           {activeTab === 'activity' && <ActivityScreen />}
           {activeTab === 'system' && <SystemScreen />}
           {activeTab === 'settings' && <SettingsScreen />}

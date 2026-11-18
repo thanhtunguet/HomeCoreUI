@@ -28,7 +28,7 @@ import { usePolling } from '../hooks/usePolling';
 import { usePowerCooldown } from '../hooks/usePowerCooldown';
 import { useAuth } from './AuthContext';
 
-type Tab = 'dashboard' | 'devices' | 'ddns' | 'activity' | 'system' | 'settings';
+type Tab = 'dashboard' | 'devices' | 'ddns' | 'portforward' | 'activity' | 'system' | 'settings';
 
 export interface Toast {
   id: number;

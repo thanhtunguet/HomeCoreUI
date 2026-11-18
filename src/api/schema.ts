@@ -36,6 +36,13 @@ export type AlertChannelCreate = Req<'AlertChannelCreate'>;
 export type AlertChannelUpdate = Req<'AlertChannelUpdate'>;
 export type AlertTestResult = Res<'AlertTestResult'>;
 
+/** Port forwarding rules (ADR-022). `status` is runtime state; `enabled` is the stored switch. */
+export type PortForwardProtocol = Schemas['PortForwardProtocol'];
+export type PortForwardStatus = Schemas['PortForwardStatus'];
+export type PortForward = Res<'PortForward'>;
+export type PortForwardCreate = Req<'PortForwardCreate'>;
+export type PortForwardUpdate = Req<'PortForwardUpdate'>;
+
 export type ApiDeviceStatus = Schemas['DeviceStatus'];
 export type PowerTransition = Schemas['PowerTransition'];
 export type DeviceType = Schemas['DeviceType'];

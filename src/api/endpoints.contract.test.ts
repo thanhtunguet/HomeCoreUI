@@ -62,6 +62,12 @@ const calls: Record<string, () => Promise<unknown>> = {
   updateAlertChannel: () => endpoints.updateAlertChannel(ID, { enabled: false }),
   deleteAlertChannel: () => endpoints.deleteAlertChannel(ID),
   testAlertChannel: () => endpoints.testAlertChannel(ID),
+  listPortForwards: () => endpoints.listPortForwards(),
+  getPortForward: () => endpoints.getPortForward(ID),
+  createPortForward: () =>
+    endpoints.createPortForward({ name: 'n', protocol: 'tcp', listen_port: 8080, target_host: '10.0.0.2', target_port: 80 }),
+  updatePortForward: () => endpoints.updatePortForward(ID, { enabled: false }),
+  deletePortForward: () => endpoints.deletePortForward(ID),
   listDevices: () => endpoints.listDevices(),
   createDevice: () => endpoints.createDevice({ name: 'n', ip_address: '10.0.0.2', monitor_port: 22 }),
   updateDevice: () => endpoints.updateDevice(ID, { name: 'n' }),
@@ -179,6 +185,17 @@ describe('spec facts the UI relies on', () => {
     expect(sc.AlertChannel.properties.has_secret).toBeDefined();
     expect(sc.AlertChannelCreate.properties.secret.writeOnly).toBe(true);
     expect(sc.AlertChannelCreate.required).toEqual(expect.arrayContaining(['name', 'type', 'settings', 'secret']));
+  });
+
+  it('port forwarding: protocols, statuses and the create defaults the UI relies on', () => {
+    const sc = spec.components.schemas;
+    expect(sc.PortForwardProtocol.enum).toEqual(['tcp', 'udp', 'universal']);
+    expect(sc.PortForwardStatus.enum).toEqual(['running', 'stopped', 'error']);
+    expect(sc.PortForwardCreate.required).toEqual(
+      expect.arrayContaining(['name', 'protocol', 'listen_port', 'target_host', 'target_port']),
+    );
+    expect(sc.PortForwardCreate.properties.listen_address.default).toBe('0.0.0.0');
+    expect(sc.PortForward.required).toEqual(expect.arrayContaining(['enabled', 'status']));
   });
 
   it('Cloudflare lookups take api_token or config_id', () => {

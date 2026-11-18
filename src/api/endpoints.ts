@@ -29,6 +29,9 @@ import type {
   Health,
   SystemInfo,
   Page,
+  PortForward,
+  PortForwardCreate,
+  PortForwardUpdate,
   ProbeResult,
   ServiceKey,
   ServiceKeyCreate,
@@ -95,6 +98,16 @@ export const updateAlertChannel = (id: string, body: AlertChannelUpdate) =>
 export const deleteAlertChannel = (id: string) => request<void>(`/api/v1/alerts/channels/${id}`, { method: 'DELETE' });
 /** Sends a test message now. A delivery failure is a normal 200 with `result: 'failed'` and the reason. */
 export const testAlertChannel = (id: string) => request<AlertTestResult>(`/api/v1/alerts/channels/${id}/test`, { method: 'POST' });
+
+// port forwarding rules (ADR-022; session token required)
+export const listPortForwards = () => request<{ items: PortForward[] }>('/api/v1/port-forwards').then(r => r.items);
+export const getPortForward = (id: string) => request<PortForward>(`/api/v1/port-forwards/${id}`);
+export const createPortForward = (body: PortForwardCreate) =>
+  request<PortForward>('/api/v1/port-forwards', { method: 'POST', body });
+/** `enabled` is the on/off switch; any other change restarts a running rule. */
+export const updatePortForward = (id: string, body: PortForwardUpdate) =>
+  request<PortForward>(`/api/v1/port-forwards/${id}`, { method: 'PATCH', body });
+export const deletePortForward = (id: string) => request<void>(`/api/v1/port-forwards/${id}`, { method: 'DELETE' });
 
 // devices
 export const listDevices = () => collect<ApiDevice>('/api/v1/devices');

@@ -672,6 +672,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/port-forwards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List port forwarding rules */
+        get: operations["listPortForwards"];
+        put?: never;
+        /**
+         * Add a port forwarding rule
+         * @description The Controller listens on `listen_address:listen_port` and relays every TCP connection
+         *     and/or UDP datagram to `target_host:target_port` (ADR-022). `protocol` is `tcp`, `udp` or
+         *     `universal` (both, on the same port). An enabled rule starts at once; the `201` carries the
+         *     outcome in `status` (`running`, or `error` with the reason in `last_error`, for example the
+         *     port is already in use). A rule that cannot start stays `enabled` and is retried
+         *     periodically, so it also comes up after a restart once the port or interface is available.
+         *
+         *     `listen_address` is an IP literal (default `0.0.0.0`: every IPv4 interface). It is not checked
+         *     against the host's interfaces when the rule is saved: an address that is not available makes
+         *     the rule `error` until it is. Two **enabled** rules cannot overlap on the same port, protocol
+         *     and address (`409`); a disabled rule reserves nothing.
+         */
+        post: operations["createPortForward"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/port-forwards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PortForwardId"];
+            };
+            cookie?: never;
+        };
+        /** Get one port forwarding rule */
+        get: operations["getPortForward"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a port forwarding rule
+         * @description Closes the listeners first, then removes the rule.
+         */
+        delete: operations["deletePortForward"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a port forwarding rule (partial)
+         * @description `enabled` is the on/off switch: `false` closes the listeners (established connections are
+         *     dropped), `true` opens them. The state is stored, so the Controller restores it after a
+         *     restart. A change of any other field restarts a running rule. Omitted fields are unchanged.
+         */
+        patch: operations["updatePortForward"];
+        trace?: never;
+    };
     "/api/turn-on": {
         parameters: {
             query?: never;
@@ -1360,6 +1420,66 @@ export interface components {
             error?: string;
         };
         /**
+         * @description `universal` listens for TCP **and** UDP on the same port.
+         * @enum {string}
+         */
+        PortForwardProtocol: "tcp" | "udp" | "universal";
+        /**
+         * @description What the Controller is doing now, not what is stored. `running`: listening. `stopped`: the
+         *     rule is disabled (or the Controller has not started it yet). `error`: the rule is enabled but
+         *     could not listen (reason in `last_error`); it is retried every 15 seconds.
+         * @enum {string}
+         */
+        PortForwardStatus: "running" | "stopped" | "error";
+        PortForward: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            protocol: components["schemas"]["PortForwardProtocol"];
+            /**
+             * @description IP address of a local interface; `0.0.0.0` (or `::`) = all.
+             * @example 0.0.0.0
+             */
+            listen_address: string;
+            listen_port: number;
+            /**
+             * @description IP address or host name.
+             * @example 192.168.1.20
+             */
+            target_host: string;
+            target_port: number;
+            /** @description The stored on/off switch; restored after a restart. */
+            enabled: boolean;
+            status: components["schemas"]["PortForwardStatus"];
+            /** @description Why the rule is in `error`; absent otherwise. */
+            last_error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PortForwardCreate: {
+            /** @description Unique, ignoring case. */
+            name: string;
+            protocol: components["schemas"]["PortForwardProtocol"];
+            /** @default 0.0.0.0 */
+            listen_address?: string;
+            listen_port: number;
+            target_host: string;
+            target_port: number;
+            /** @default true */
+            enabled?: boolean;
+        };
+        PortForwardUpdate: {
+            name?: string;
+            protocol?: components["schemas"]["PortForwardProtocol"];
+            listen_address?: string;
+            listen_port?: number;
+            target_host?: string;
+            target_port?: number;
+            enabled?: boolean;
+        };
+        /**
          * @description Credentials for a Cloudflare lookup: give **exactly one** of `api_token` (a token the user is
          *     typing into the form, not yet saved) or `config_id` (reuse the sealed token of an existing
          *     DDNS configuration). Neither or both: `400`.
@@ -1490,6 +1610,7 @@ export interface components {
         ServiceAccountKeyId: string;
         DdnsId: string;
         AlertChannelId: string;
+        PortForwardId: string;
         /** @description The device's id (UUID) or its name, compared case-insensitively. */
         LegacyDevice: string;
         Limit: number;
@@ -2507,6 +2628,132 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listPortForwards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules, ordered by name (case-insensitive) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PortForward"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createPortForward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortForwardCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortForward"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getPortForward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PortForwardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortForward"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deletePortForward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PortForwardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updatePortForward: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["PortForwardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PortForwardUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortForward"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     legacyTurnOn: {
